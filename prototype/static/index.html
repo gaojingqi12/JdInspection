@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>收银台&内单交易域巡检控制台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar hero-panel">
+      <div>
+        <div class="eyebrow">收银台&内单交易域</div>
+        <h1>收银台&内单交易域巡检控制台</h1>
+        <p class="hero-copy">巡检数据、脚本编排和指标问答统一入口</p>
+      </div>
+      <div class="header-meta">
+        <span id="department">-</span>
+        <span id="range">-</span>
+      </div>
+    </header>
+
+    <section class="command-bar" aria-label="actions">
+      <div class="command-group inspection-group">
+        <div class="command-label">巡检操作</div>
+        <div class="toolbar">
+          <button id="refreshBtn" class="primary-command" type="button" data-confirm-title="刷新数据">刷新数据</button>
+          <button type="button" data-prompt="帮我日常巡检" data-confirm-title="日常巡检">日常巡检</button>
+          <button type="button" data-prompt="周度巡检" data-confirm-title="周度巡检">周度巡检</button>
+          <button class="repair-command" type="button" data-action="repair_delayed_test" data-confirm-title="修复提测">修复提测</button>
+          <button class="repair-command" type="button" data-action="repair_delayed_online" data-confirm-title="修复上线">修复上线</button>
+          <button type="button" data-prompt="今天有哪些异常和风险？" data-confirm-title="风险点">风险点</button>
+          <button type="button" data-prompt="帮我生成一段报备草稿" data-confirm-title="报备草稿">报备草稿</button>
+        </div>
+      </div>
+      <div class="command-group report-group">
+        <div class="command-label">查看报告</div>
+        <div class="report-links">
+          <a class="button-link" href="/reports/daily">日常报告</a>
+          <a class="button-link" href="/reports/weekly">周度报告</a>
+          <a class="button-link" href="/reports/repair">修复报告</a>
+          <a class="button-link" href="/reports/thursday">日期调整</a>
+        </div>
+      </div>
+      <span id="loadedAt" class="muted"></span>
+    </section>
+
+    <nav class="page-tabs" aria-label="页面切换">
+      <button class="active" type="button" data-view-tab="dashboard">巡检看板</button>
+      <button type="button" data-view-tab="chat">AI 对话</button>
+    </nav>
+
+    <section class="metric-grid dashboard-view" id="overview"></section>
+
+    <section class="panel action-panel dashboard-view">
+      <div class="panel-head compact">
+        <div>
+          <h2>功能中心</h2>
+          <p>常用动作快捷执行，其余功能从更多动作里选择</p>
+        </div>
+        <div class="more-action-control">
+          <select id="moreActionSelect" aria-label="more actions"></select>
+          <button id="runMoreActionBtn" type="button">执行</button>
+        </div>
+      </div>
+      <div id="featuredActions" class="featured-actions"></div>
+    </section>
+
+    <section class="workspace dashboard-view">
+      <div class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>本周趋势</h2>
+            <p id="chartSubtitle"></p>
+          </div>
+          <button id="trendResetBtn" class="ghost-button" type="button" hidden>返回总览</button>
+        </div>
+        <div id="trendGrid" class="trend-grid" aria-label="trend charts"></div>
+      </div>
+    </section>
+
+    <section id="chatView" class="chat-view" hidden>
+      <aside class="panel chat-panel">
+        <div class="chat-page-layout">
+          <aside class="chat-history-panel">
+            <div class="chat-history-title">
+              <div>
+                <h2>AI 对话</h2>
+                <p><span id="chatModelBadge">MiMo-V2.5-Pro</span> · 脚本编排</p>
+              </div>
+            </div>
+            <div class="chat-history-head">
+              <span>对话历史</span>
+              <div class="chat-history-actions">
+                <button id="newChatBtn" type="button">新建</button>
+                <button id="clearHistoryBtn" type="button">清空历史</button>
+              </div>
+            </div>
+            <div id="chatSessions" class="chat-sessions"></div>
+          </aside>
+          <div class="chat-main">
+            <div class="chat-current-head">
+              <div>
+                <span class="chat-status-dot"></span>
+                <strong>当前对话</strong>
+                <span>可询问巡检数据，也可以触发脚本任务</span>
+              </div>
+              <div class="chat-current-actions">
+                <label class="chat-model-control">
+                  <span>模型</span>
+                  <select id="modelSelect" aria-label="AI 模型">
+                    <option value="mimo-v2.5-pro">MiMo-V2.5-Pro</option>
+                    <option value="mimo-v2.5">MiMo-V2.5</option>
+                    <option value="mimo-v2-pro">MiMo-V2-Pro</option>
+                    <option value="mimo-v2-omni">MiMo-V2-Omni</option>
+                  </select>
+                </label>
+                <button id="clearChatBtn" type="button">清空当前</button>
+              </div>
+            </div>
+            <div id="messages" class="messages"></div>
+            <div class="chat-quick" aria-label="quick chat prompts">
+              <button type="button" data-prompt="帮我日常巡检">日常巡检</button>
+              <button type="button" data-prompt="帮我看一下修复状态">修复状态</button>
+              <button type="button" data-prompt="今天有哪些风险点？">风险点</button>
+            </div>
+            <form id="chatForm" class="chat-form">
+              <textarea id="chatInput" rows="2" placeholder="问巡检数据..." required></textarea>
+              <button type="submit">发送</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="lower-grid dashboard-view">
+      <div class="panel">
+        <div class="panel-head compact">
+          <h2>任务状态</h2>
+          <div class="panel-actions">
+            <button id="refreshJobsBtn" type="button">刷新任务</button>
+            <button id="clearJobsBtn" type="button">清空</button>
+          </div>
+        </div>
+        <div id="jobs" class="jobs"></div>
+      </div>
+      <div class="panel ai-users-panel">
+        <div class="panel-head compact">
+          <div>
+            <h2>AI 非深度用户</h2>
+            <p id="aiUsersMeta">-</p>
+          </div>
+        </div>
+        <div id="aiUsers" class="ai-user-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="confirmModal" class="confirm-modal" hidden>
+    <div id="confirmBackdrop" class="confirm-backdrop"></div>
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="confirm-dialog-head">
+        <span class="confirm-dialog-kicker">确认操作</span>
+        <h3 id="confirmTitle">确认执行</h3>
+      </div>
+      <p id="confirmDescription" class="confirm-dialog-desc"></p>
+      <div class="confirm-dialog-actions">
+        <button id="confirmCancelBtn" class="confirm-cancel" type="button">取消</button>
+        <button id="confirmAcceptBtn" class="confirm-accept" type="button">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="imagePreviewModal" class="image-preview-modal" hidden>
+    <div id="imagePreviewBackdrop" class="image-preview-backdrop"></div>
+    <div class="image-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="imagePreviewTitle">
+      <div class="image-preview-head">
+        <div>
+          <div class="image-preview-kicker">巡检截图</div>
+          <h3 id="imagePreviewTitle">截图预览</h3>
+        </div>
+        <button id="imagePreviewCloseBtn" class="image-preview-close" type="button" aria-label="关闭预览">关闭</button>
+      </div>
+      <div class="image-preview-frame">
+        <img id="imagePreviewImage" alt="" />
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
