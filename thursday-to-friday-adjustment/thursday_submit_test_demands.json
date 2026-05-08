@@ -1,0 +1,134 @@
+{
+  "target_weekday": "Thursday",
+  "target_date": "2026-05-07",
+  "match_key": "plan_submit_test_date",
+  "count": 9,
+  "items": [
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6107447",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6107447",
+      "demand_name": "【跨境前置】内贸收银台外卡下发放开SoldOversea限制",
+      "owner": "李景伦",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-12",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6096772",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6096772",
+      "demand_name": "【跨境前置】外卡内绑二期用户扣费需求（前置+收银台+网关）",
+      "owner": "李景伦",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6136521",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136521",
+      "demand_name": "【跨境前置】外卡内绑优化需求",
+      "owner": "李景伦",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-12",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6084578",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6084578",
+      "demand_name": "【JD支付】高风险用户屏蔽白条",
+      "owner": "徐涛",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-12",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6097493",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6097493",
+      "demand_name": "【前置】【产品需求】历山能力迭代",
+      "owner": "刘卫强",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-18",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6107814",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6107814",
+      "demand_name": "【SDK服务端】【产品需求】亲密卡接入融合收银台",
+      "owner": "赵梓博",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-26",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6136726",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136726",
+      "demand_name": "【前置】【支付前置】钱包余额支持纯后返",
+      "owner": "刘卫强",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6181787",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6181787",
+      "demand_name": "CDP标签接口改造",
+      "owner": "谢传威",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-05-12",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S83】",
+      "sprint_data_item": "325168",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=325168",
+      "item_id": "6096807",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=325168&cardId=6096807",
+      "demand_name": "【SDK服务端】【外单模块】外场收银台积分抵扣项目",
+      "owner": "杨飞宇",
+      "plan_submit_test_date": "2026-05-07",
+      "plan_date": "2026-06-10",
+      "matched_by": [
+        "plan_submit_test_date"
+      ]
+    }
+  ]
+}

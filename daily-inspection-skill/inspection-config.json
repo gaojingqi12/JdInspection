@@ -1,0 +1,261 @@
+{
+  "common": {
+    "department_c3": "支付方案研发部",
+    "display_domain": "收银台&内单交易域",
+    "online_report_url": "https://gaojingqi12.github.io/inspection/"
+  },
+  "okr": {
+    "delay_test_rate": {
+      "directory": "OKR-inspection/delay-test-rate-skill",
+      "skill_name": "delay-test-rate-inspection",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%25238a5f81d37fc0623f92fcab82f005db8a",
+      "card_title": "延期提测率-周（5->4）-汇总-C3维度",
+      "indicator_type": "delay_test_rate",
+      "indicator_name": "延期提测率-周（5->4）-汇总-C3维度",
+      "display_name": "延期提测率",
+      "date_filter_label": "卡片进入测试阶段时间",
+      "department_filter_label": "任务处理人部门C3",
+      "query_screenshot": "out/05_after_query.png",
+      "focus_metric_key": "delay_test_rate_okr",
+      "metrics": [
+        {
+          "key": "planned_test_requirements",
+          "label": "计划提测需求数",
+          "unit": "count",
+          "source_header": "计划提测需求数",
+          "parser": "int"
+        },
+        {
+          "key": "delayed_test_requirements",
+          "label": "延期提测需求数",
+          "unit": "count",
+          "source_header": "延期提测需求数",
+          "parser": "int"
+        },
+        {
+          "key": "delay_test_rate_okr",
+          "label": "延期提测率（OKR考核指标）",
+          "unit": "%",
+          "source_header": "延期提测率（OKR考核指标）",
+          "parser": "percent"
+        }
+      ]
+    },
+    "delay_online_rate": {
+      "directory": "OKR-inspection/delay-online-rate-skill",
+      "skill_name": "delay-online-rate-inspection",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%2523bec0cff726e665ba2018519fef985cde",
+      "card_title": "延期上线率-周（5->4）-汇总-C3维度",
+      "indicator_type": "delay_online_rate",
+      "indicator_name": "延期上线率-周（5->4）-汇总-C3维度",
+      "display_name": "延期上线率",
+      "date_filter_label": "卡片完成日期",
+      "department_filter_label": "任务处理人部门C3",
+      "query_screenshot": "out/05_after_query.png",
+      "focus_metric_key": "delay_online_rate",
+      "metrics": [
+        {
+          "key": "planned_online_requirements",
+          "label": "计划上线需求数",
+          "unit": "count",
+          "source_header": "计划上线需求数",
+          "parser": "int"
+        },
+        {
+          "key": "delayed_online_requirements",
+          "label": "延期上线需求数",
+          "unit": "count",
+          "source_header": "延期上线需求数",
+          "parser": "int"
+        },
+        {
+          "key": "delay_online_rate",
+          "label": "延期上线率",
+          "unit": "%",
+          "source_header": "延期上线率",
+          "parser": "percent"
+        }
+      ]
+    },
+    "technical_refactor_working_hours": {
+      "directory": "OKR-inspection/technical-refactor-working-hours-skill",
+      "skill_name": "technical-refactor-working-hours-inspection",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%2523356cd9714b996c2177d9c9d068474417",
+      "card_title": "技术改造工时占比-周（5->4）-汇总-C3维度",
+      "indicator_type": "technical_refactor_working_hours",
+      "indicator_name": "技术改造工时占比-周（5->4）-汇总-C3维度",
+      "display_name": "技术改造工时占比",
+      "date_filter_label": "填报日期",
+      "department_filter_label": "填报人部门C3",
+      "query_screenshot": "out/05_after_query.png",
+      "focus_metric_key": "technical_refactor_working_hours_rate",
+      "metrics": [
+        {
+          "key": "total_working_hours",
+          "label": "总工时/填报工时",
+          "unit": "hour",
+          "source_header": "总工时（人天）",
+          "parser": "float"
+        },
+        {
+          "key": "technical_refactor_working_hours",
+          "label": "技术改造工时",
+          "unit": "hour",
+          "source_header": "技术改造工时（人天）",
+          "parser": "float"
+        },
+        {
+          "key": "technical_refactor_working_hours_rate",
+          "label": "技术改造工时占比",
+          "unit": "%",
+          "source_header": "技术改造工时占比",
+          "parser": "percent"
+        }
+      ]
+    },
+    "bi_weekly_delivery_rate": {
+      "directory": "OKR-inspection/bi-weekly-delivery-rate-skill",
+      "skill_name": "bi-weekly-delivery-rate-inspection",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%252325738583d55e87d7698eb308460aff29",
+      "indicator_type": "bi_weekly_delivery_rate",
+      "indicator_name": "双周交付率",
+      "display_name": "双周交付率",
+      "metric_key": "biweekly_delivery_rate",
+      "tooltip_label": "双周交付率",
+      "date_filter_label": "卡片完成日期",
+      "snapshot_filter_label": "快照日期",
+      "department_filter_label": "任务处理人部门C3",
+      "query_screenshot": "out/03_after_query.png",
+      "focus_metric_key": "biweekly_delivery_rate",
+      "metrics": [
+        {
+          "key": "biweekly_delivery_rate",
+          "label": "双周交付率",
+          "unit": "%",
+          "parser": "percent"
+        }
+      ]
+    }
+  },
+  "ai": {
+    "url": "http://xingyun.jd.com/jStatisticsRoot/saleDashbord/customization?dashboardId=6098",
+    "indicator_type": "ai_non_deep_users",
+    "indicator_name": "AI 深度用户占比 - 软开测试岗",
+    "card_label": "AI深度用户占比-软开测试岗(%)",
+    "date_tab_label": "日",
+    "filter_field": "是否深度用户",
+    "filter_value": "否",
+    "name_field": "用户姓名",
+    "target_names": [
+      "蔡永乐",
+      "常姜洲",
+      "常彦升",
+      "桂斌",
+      "兰春秋",
+      "李进锋",
+      "李景伦",
+      "刘竟博(Seven)",
+      "刘卫强",
+      "刘学",
+      "陆鑫(Max)",
+      "秦赞",
+      "邱登辉",
+      "覃杨阳",
+      "王佳斌(Bin)",
+      "王诗赋",
+      "王朝华",
+      "温丽星",
+      "谢传威",
+      "徐涛",
+      "杨飞宇",
+      "张鑫",
+      "张欣强",
+      "赵波",
+      "赵梓博",
+      "郑双龙",
+      "朱涛"
+    ],
+    "required_columns": [
+      "用户erp",
+      "用户姓名",
+      "AI代码本地提交占比",
+      "是否深度用户"
+    ]
+  },
+  "continuous_delivery": {
+    "url": "https://easybi.jd.com/bi/#/insight?code=361A3E1072028B83D4BF84086F5E30DFE3DE53F9F1A81091693866D563AA89BA",
+    "indicator_type": "continuous_delivery",
+    "indicator_name": "持续交付",
+    "menu_label": "持续交付交付明细",
+    "department_filter_label": "交付负责人部门",
+    "department_levels": [
+      "京东科技",
+      "金融科技事业群",
+      "金融科技研发部",
+      "支付方案研发部"
+    ],
+    "query_screenshot": "out/three_cards.png",
+    "metrics": [
+      {
+        "key": "team_space_dev_test_online_requirements",
+        "title": "团队空间开发测试上线需求数",
+        "label": "团队空间开发测试上线需求数",
+        "unit": "count"
+      },
+      {
+        "key": "team_space_continuous_delivery_dev_test_online_requirements",
+        "title": "团队空间_持需交付_开发测试上线需求数",
+        "label": "团队空间_持需交付_开发测试上线需求数",
+        "unit": "count"
+      },
+      {
+        "key": "continuous_delivery_team_space_online_requirement_rate",
+        "title": "持续交付_团队空间上线需求占比",
+        "label": "持续交付_团队空间上线需求占比",
+        "unit": "%"
+      }
+    ]
+  },
+  "repair": {
+    "delayed_test": {
+      "repair_type": "delayed_test",
+      "title": "延期提测修复巡检",
+      "directory": "reschedule-delayed-test ",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%25238a5f81d37fc0623f92fcab82f005db8a",
+      "card_title": "需求明细-延期提测",
+      "filter_date_label": "卡片进入测试阶段时间",
+      "department_filter_label": "任务处理人部门C3",
+      "team_space_target": "支付生态研发部",
+      "target_status_header": "是否延期提测",
+      "target_status_value": "延期提测",
+      "target_date_field_label": "计划提测日期",
+      "trigger_indicator_type": "delay_test_rate",
+      "trigger_metric_key": "delayed_test_requirements",
+      "trigger_metric_label": "延期提测需求数",
+      "inspection_item": "延期提测率",
+      "count_label": "筛选延期提测数",
+      "corrected_date_key": "修正后计划提测日期",
+      "status_key": "是否延期提测"
+    },
+    "delayed_online": {
+      "repair_type": "delayed_online",
+      "title": "延期上线修复巡检",
+      "directory": "repair-delayed-launch",
+      "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%2523bec0cff726e665ba2018519fef985cde",
+      "card_title": "需求明细-延期上线",
+      "filter_date_label": "卡片完成日期",
+      "department_filter_label": "任务处理人部门C3",
+      "team_space_target": "支付生态研发部",
+      "target_status_header": "是否延期上线",
+      "target_status_value": "延期上线",
+      "target_date_field_label": "计划上线日期",
+      "trigger_indicator_type": "delay_online_rate",
+      "trigger_metric_key": "delayed_online_requirements",
+      "trigger_metric_label": "延期上线需求数",
+      "inspection_item": "延期上线率",
+      "count_label": "筛选延期上线数",
+      "corrected_date_key": "修正后计划上线日期",
+      "status_key": "是否延期上线"
+    }
+  }
+}

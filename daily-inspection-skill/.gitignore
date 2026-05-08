@@ -1,0 +1,56 @@
+# macOS
+.DS_Store
+._*
+
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Node or frontend tooling, if used for local checks
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local browser automation artifacts
+playwright-report/
+test-results/
+.playwright/
+
+# Inspection runtime outputs.
+# Keep root index.html and assets/screenshots/ tracked for GitHub Pages.
+AI-inspection/out/
+ContinuousDelivery-inspection/out/
+OKR-inspection/*/out/
+joyclaw-daily-inspection-orchestrator-skill/out/
+
+# Repair runtime histories and caches
+repair-delayed-launch/history/
+reschedule-delayed-test\ /history/
+
+# Downloaded spreadsheets and generated archives
+*.xlsx
+*.xls
+*.csv
+*.zip

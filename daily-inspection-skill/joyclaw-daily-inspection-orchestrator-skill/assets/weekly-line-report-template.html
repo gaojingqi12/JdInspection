@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本周巡检趋势</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #1f2a32;
+      --muted: #65727c;
+      --line: #dce3e8;
+      --soft: #f2f5f7;
+      --accent: #2a7c78;
+      --accent-soft: #e8f4f2;
+      --blue: #2f6f9f;
+      --red: #c94c45;
+      --gold: #9b741e;
+      --green: #287a5b;
+      --shadow: 0 20px 46px rgba(31, 42, 50, 0.09);
+      --shadow-hover: 0 24px 60px rgba(31, 42, 50, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, #eaf0f3 0, #f7f8f9 320px),
+        var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+
+    header {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--accent);
+      font-size: 13px;
+      line-height: 1.4;
+      box-shadow: 0 8px 24px rgba(31, 42, 50, 0.06);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.15;
+      font-weight: 720;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .meta span {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .overview {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 0 16px;
+    }
+
+    .overview-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 14px 34px rgba(31, 42, 50, 0.07);
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .overview-card:hover {
+      transform: translateY(-2px);
+      border-color: #c7d4dc;
+      box-shadow: var(--shadow-hover);
+    }
+
+    .overview-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 7px;
+    }
+
+    .overview-value {
+      font-size: 24px;
+      line-height: 1.1;
+      font-weight: 760;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .overview-foot {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .view-tabs {
+      display: inline-flex;
+      width: fit-content;
+      gap: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px;
+      margin: 0 0 18px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 12px 30px rgba(31, 42, 50, 0.07);
+    }
+
+    .view-tabs button,
+    .icon-button {
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .view-tabs button {
+      min-width: 58px;
+      padding: 7px 12px;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .view-tabs button.is-active {
+      background: var(--ink);
+      color: #ffffff;
+      box-shadow: 0 6px 16px rgba(31, 42, 50, 0.18);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .panel::before,
+    .repair-panel::before,
+    .delivery-panel::before,
+    .ai-panel::before {
+      content: "";
+      display: block;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--blue), var(--gold), var(--red));
+    }
+
+    .panel:hover,
+    .repair-item:hover,
+    .delivery-metric:hover,
+    .ai-user:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-hover);
+      border-color: #c7d4dc;
+    }
+
+    .panel-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: start;
+      padding: 20px 20px 8px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 680;
+    }
+
+    .tag {
+      border-radius: 8px;
+      padding: 5px 9px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 8px 20px 14px;
+    }
+
+    .stat {
+      min-width: 0;
+      border-top: 1px solid var(--line);
+      padding-top: 11px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 720;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 20px 14px;
+    }
+
+    .legend button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: #ffffff;
+      color: #404040;
+      font: inherit;
+      font-size: 12px;
+      line-height: 1.3;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .legend button:hover {
+      transform: translateY(-1px);
+      border-color: #c8d4dc;
+    }
+
+    .legend button.is-active {
+      border-color: #b6cbd1;
+      background: var(--accent-soft);
+      color: var(--ink);
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .chart {
+      min-height: 248px;
+      padding: 4px 16px 14px;
+    }
+
+    .screenshot {
+      margin: 0 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafafa;
+      overflow: hidden;
+      transition: border-color 140ms ease, transform 140ms ease;
+    }
+
+    .screenshot:hover {
+      border-color: #bfd0d7;
+    }
+
+    .screenshot-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      background: #ffffff;
+      cursor: zoom-in;
+    }
+
+    .repair-panel,
+    .ai-panel,
+    .delivery-panel {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .repair-head,
+    .ai-head,
+    .delivery-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: start;
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .repair-title,
+    .ai-title,
+    .delivery-title {
+      display: grid;
+      gap: 6px;
+    }
+
+    .repair-title p,
+    .ai-title p,
+    .delivery-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .repair-list {
+      display: grid;
+      gap: 14px;
+      padding: 16px 20px 20px;
+    }
+
+    .repair-item {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .repair-item-head {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .repair-item-title {
+      display: grid;
+      gap: 4px;
+    }
+
+    .repair-item-title h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.35;
+    }
+
+    .repair-item-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .repair-status {
+      border-radius: 8px;
+      padding: 5px 9px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .icon-button {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .icon-button:hover {
+      border-color: #c2d0d8;
+      background: var(--soft);
+    }
+
+    .repair-item.is-collapsed .repair-details {
+      display: none;
+    }
+
+    .repair-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .repair-stat {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fafafa;
+    }
+
+    .repair-stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 5px;
+    }
+
+    .repair-stat-value {
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 720;
+    }
+
+    .repair-details {
+      display: grid;
+      gap: 10px;
+      padding: 0 14px 14px;
+    }
+
+    .repair-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .repair-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .repair-table th,
+    .repair-table td {
+      border-top: 1px solid var(--line);
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    .repair-table a {
+      color: var(--blue);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(47, 111, 159, 0.32);
+    }
+
+    .repair-table a:hover {
+      color: var(--accent);
+      border-bottom-color: currentColor;
+    }
+
+    .repair-table th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .repair-empty {
+      border-top: 1px solid var(--line);
+      padding: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .delivery-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 16px 20px 20px;
+    }
+
+    .delivery-metric {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 14px 12px;
+      background: #ffffff;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .delivery-metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 8px;
+    }
+
+    .delivery-metric-value {
+      font-size: 26px;
+      line-height: 1.1;
+      font-weight: 720;
+    }
+
+    .ai-count {
+      min-width: 92px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: center;
+      background: #fafafa;
+    }
+
+    .ai-count strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .ai-count span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .ai-users {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+      padding: 16px 20px 20px;
+    }
+
+    .ai-user {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      background: #ffffff;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .ai-user-name {
+      font-size: 15px;
+      font-weight: 680;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+
+    .ai-user-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 230px;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 230px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .axis {
+      fill: #777777;
+      font-size: 12px;
+    }
+
+    .grid-line {
+      stroke: #e8e8e8;
+      stroke-width: 1;
+    }
+
+    .trend-line {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      cursor: pointer;
+      opacity: 0.42;
+      transition: opacity 120ms ease, stroke-width 120ms ease;
+    }
+
+    .trend-line.is-active {
+      opacity: 1;
+      stroke-width: 4;
+    }
+
+    .trend-point {
+      stroke: #ffffff;
+      stroke-width: 2;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: r 120ms ease, opacity 120ms ease;
+    }
+
+    .trend-point.is-active {
+      opacity: 1;
+    }
+
+    .trend-point:hover {
+      r: 6;
+    }
+
+    .chart-tooltip {
+      position: fixed;
+      z-index: 20;
+      pointer-events: none;
+      max-width: 260px;
+      border: 1px solid rgba(31, 42, 50, 0.14);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(31, 42, 50, 0.93);
+      color: #ffffff;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 14px 34px rgba(31, 42, 50, 0.18);
+      opacity: 0;
+      transform: translate(-50%, -8px);
+      transition: opacity 100ms ease;
+    }
+
+    .chart-tooltip.is-visible {
+      opacity: 1;
+    }
+
+    .image-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      place-items: center;
+      padding: 28px;
+      background: rgba(18, 25, 30, 0.78);
+    }
+
+    .image-modal.is-open {
+      display: grid;
+    }
+
+    .image-modal img {
+      display: block;
+      max-width: min(1120px, 94vw);
+      max-height: 86vh;
+      object-fit: contain;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+    }
+
+    .modal-close {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      width: 36px;
+      height: 36px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    footer {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        padding: 26px 14px 36px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .view-tabs {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        width: 100%;
+      }
+
+      .view-tabs button {
+        min-width: 0;
+        padding-inline: 8px;
+      }
+
+      .panel-head,
+      .stat-row,
+      .repair-head,
+      .repair-item-head,
+      .repair-stats,
+      .ai-head,
+      .delivery-head,
+      .delivery-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .tag {
+        width: fit-content;
+      }
+    }
+
+    @media (max-width: 460px) {
+      .overview {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow" id="department">收银台&内单交易域</div>
+      <h1>本周巡检趋势</h1>
+      <div class="meta">
+        <span id="date-range">本周</span>
+        <span id="generated-at">待生成</span>
+      </div>
+    </header>
+
+    <section class="overview" id="overview"></section>
+
+    <nav class="view-tabs" id="view-tabs" aria-label="视图切换">
+      <button type="button" class="is-active" data-view="all">全部</button>
+      <button type="button" data-view="okr">OKR</button>
+      <button type="button" data-view="repair">修复</button>
+      <button type="button" data-view="delivery">交付</button>
+      <button type="button" data-view="ai">AI</button>
+    </nav>
+
+    <section class="grid view-section" id="charts" data-section="okr"></section>
+
+    <section class="repair-panel view-section" id="repair-inspections" data-section="repair"></section>
+
+    <section class="delivery-panel view-section" id="continuous-delivery" data-section="delivery"></section>
+
+    <section class="ai-panel view-section" id="ai-inspection" data-section="ai"></section>
+
+    <footer id="footnote">本周每日巡检 JSON 汇总。</footer>
+  </main>
+  <div class="chart-tooltip" id="chart-tooltip"></div>
+  <div class="image-modal" id="image-modal" aria-hidden="true">
+    <button type="button" class="modal-close" data-modal-close aria-label="关闭">×</button>
+    <img src="" alt="">
+  </div>
+
+  <script>
+    window.JOYCLAW_WEEKLY_REPORT = __JOYCLAW_WEEKLY_REPORT_JSON__;
+
+    const metricMap = {
+      delay_test_rate: {
+        title: "延期提测率",
+        default_metric_key: "delay_test_rate_okr",
+        metrics: [
+          { key: "planned_test_requirements", label: "计划提测需求数", unit: "count", color: "#2f6f9f" },
+          { key: "delayed_test_requirements", label: "延期提测需求数", unit: "count", color: "#c94c45" },
+          { key: "delay_test_rate_okr", label: "延期提测率", unit: "%", color: "#826d22" }
+        ]
+      },
+      delay_online_rate: {
+        title: "延期上线率",
+        default_metric_key: "delay_online_rate",
+        metrics: [
+          { key: "planned_online_requirements", label: "计划上线需求数", unit: "count", color: "#2f6f9f" },
+          { key: "delayed_online_requirements", label: "延期上线需求数", unit: "count", color: "#c94c45" },
+          { key: "delay_online_rate", label: "延期上线率", unit: "%", color: "#2b7a66" }
+        ]
+      },
+      technical_refactor_working_hours: {
+        title: "技术改造工时占比",
+        default_metric_key: "technical_refactor_working_hours_rate",
+        metrics: [
+          { key: "technical_refactor_working_hours_rate", label: "技术改造工时占比", unit: "%", color: "#826d22" }
+        ]
+      },
+      bi_weekly_delivery_rate: {
+        title: "双周交付率",
+        default_metric_key: "biweekly_delivery_rate",
+        metrics: [
+          { key: "biweekly_delivery_rate", label: "双周交付率", unit: "%", color: "#2f2f2f" }
+        ]
+      }
+    };
+
+	    const cardStore = new Map();
+
+    function parseDate(value) {
+      const date = new Date(`${value}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function fmtDate(value) {
+      const date = parseDate(value);
+      if (!date) return value || "-";
+      return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function fmtValue(value, unit) {
+      if (value === null || value === undefined || value === "") return "-";
+      const number = Number(value);
+      const shown = Number.isFinite(number) ? Number(number.toFixed(2)).toString() : String(value);
+      return unit === "%" ? `${shown}%` : shown;
+    }
+
+	    function escapeHtml(value) {
+	      return String(value)
+	        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+	        .replaceAll("'", "&#39;");
+	    }
+
+    function pointValue(point) {
+      if (!point) return null;
+      const number = Number(point.value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function filterThisWeek(points, range) {
+      const start = parseDate(range?.start_date);
+      const end = parseDate(range?.end_date);
+      return (points || [])
+        .filter((point) => {
+          const date = parseDate(point.date);
+          if (!date) return false;
+          if (start && date < start) return false;
+          if (end && date > end) return false;
+          return true;
+        })
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    }
+
+    function latest(points) {
+      for (let index = points.length - 1; index >= 0; index -= 1) {
+        const value = pointValue(points[index]);
+        if (value !== null) return { point: points[index], value };
+      }
+      return null;
+    }
+
+    function pointsByDate(points) {
+      const map = new Map();
+      points.forEach((point) => map.set(String(point.date), point));
+      return map;
+    }
+
+    function normalizeMetric(metric, range) {
+      return {
+        ...metric,
+        points: filterThisWeek(metric.points || [], range)
+      };
+    }
+
+    function extractCards(report) {
+      const range = report.time_range || {};
+
+      if (Array.isArray(report.focus_series)) {
+        return report.focus_series.map((item, index) => {
+          const config = metricMap[item.indicator_type] || {};
+          const rawMetrics = Array.isArray(item.metrics) && item.metrics.length
+            ? item.metrics
+            : [{
+                key: item.focus_key || config.default_metric_key,
+                label: item.focus_label || item.name || config.title || "关注值",
+                unit: item.unit || "",
+                color: item.color,
+                points: item.points || []
+              }];
+
+          const metrics = rawMetrics.map((metric, metricIndex) => {
+            const fallback = (config.metrics || []).find((candidate) => candidate.key === metric.key) || {};
+            return normalizeMetric({
+              key: metric.key || fallback.key || `metric_${metricIndex}`,
+              label: metric.label || fallback.label || metric.key || "指标",
+              unit: metric.unit || fallback.unit || "",
+              color: metric.color || fallback.color || ["#2f6f9f", "#c94c45", "#826d22", "#2b7a66"][metricIndex % 4],
+              points: metric.points || []
+            }, range);
+          });
+
+          return {
+            id: `card-${index}`,
+            indicator_type: item.indicator_type,
+            name: item.name || config.title || item.indicator_name || "指标",
+	            default_metric_key: item.default_metric_key || item.focus_key || config.default_metric_key || metrics[0]?.key,
+	            inspection_date: item.inspection_date || report.inspection_date || report.time_range?.end_date,
+	            screenshot: item.screenshot || item.query_screenshot || "",
+	            screenshot_label: item.screenshot_label || "当天巡检截图",
+	            metrics
+	          };
+        });
+      }
+
+      if (!Array.isArray(report.indicators)) return [];
+
+      return report.indicators.map((indicator, index) => {
+        const config = metricMap[indicator.indicator_type] || {};
+        const metrics = (config.metrics || []).map((metric) => normalizeMetric({
+          ...metric,
+          points: indicator.history ? (indicator.history[metric.key] || []) : []
+        }, range));
+
+        return {
+          id: `card-${index}`,
+          indicator_type: indicator.indicator_type,
+          name: config.title || indicator.indicator_name || "指标",
+	          default_metric_key: indicator.focus_metric_key || config.default_metric_key || metrics[0]?.key,
+	          inspection_date: indicator.inspection_date || report.inspection_date || report.time_range?.end_date,
+	          screenshot: indicator.source?.query_screenshot || "",
+	          screenshot_label: "当天巡检截图",
+	          metrics
+	        };
+      });
+    }
+
+    function latestMetricValue(cards, metricKey) {
+      for (const card of cards) {
+        const metric = card.metrics.find((candidate) => candidate.key === metricKey);
+        if (!metric) continue;
+        const item = latest(metric.points);
+        if (item) return { value: item.value, unit: metric.unit, date: item.point.date };
+      }
+      return null;
+    }
+
+    function sumRepairValue(report, key) {
+      const repairs = Array.isArray(report.repair_inspections) ? report.repair_inspections : [];
+      return repairs.reduce((sum, repair) => {
+        const value = Number(repair.summary?.[key] || 0);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+    }
+
+    function displayDomain(report) {
+      return report.display_domain || report.department_display_name || "收银台&内单交易域";
+    }
+
+    function repairMetricValue(report, repairType, countKey) {
+      const repairs = Array.isArray(report.repair_inspections) ? report.repair_inspections : [];
+      const repair = repairs.find((item) => item.repair_type === repairType);
+      if (!repair) return null;
+
+      const summary = repair.summary || {};
+      const rawValue = summary[countKey];
+      return {
+        value: rawValue ?? null,
+        unit: "count",
+        date: summary["巡检日期"] || repair.date || report.inspection_date || "",
+        status: summary["巡检状态"] || "-",
+        teamSpace: summary["团队空间"] || ""
+      };
+    }
+
+    function repairOverviewFoot(report, metric) {
+      const domain = displayDomain(report);
+      return metric?.date ? `${domain} · ${fmtDate(metric.date)}` : domain;
+    }
+
+    function renderOverview(report, cards) {
+      const root = document.getElementById("overview");
+      if (!root) return;
+
+      const delayTest = repairMetricValue(report, "delayed_test", "筛选延期提测数");
+      const delayOnline = repairMetricValue(report, "delayed_online", "筛选延期上线数");
+      const repaired = sumRepairValue(report, "已修复数");
+      const failed = sumRepairValue(report, "失败数");
+      const aiCount = report.ai_inspection?.count ?? 0;
+      const deliveryRate = report.continuous_delivery?.metrics?.continuous_delivery_team_space_online_requirement_rate;
+
+      const items = [
+        {
+          label: "延期提测需求",
+          value: delayTest ? fmtValue(delayTest.value, delayTest.unit) : "-",
+          foot: repairOverviewFoot(report, delayTest)
+        },
+        {
+          label: "延期上线需求",
+          value: delayOnline ? fmtValue(delayOnline.value, delayOnline.unit) : "-",
+          foot: repairOverviewFoot(report, delayOnline)
+        },
+        {
+          label: "已修复需求",
+          value: repaired,
+          foot: failed ? `失败 ${failed}` : "失败 0"
+        },
+        {
+          label: "AI 非深度用户",
+          value: aiCount,
+          foot: report.ai_inspection?.status || "-"
+        },
+        {
+          label: "持续交付占比",
+          value: fmtValue(deliveryRate, "%"),
+          foot: report.continuous_delivery?.status || "-"
+        }
+      ];
+
+      root.innerHTML = items.map((item) => `<article class="overview-card">
+        <div class="overview-label">${escapeHtml(item.label)}</div>
+        <div class="overview-value">${escapeHtml(item.value)}</div>
+        <div class="overview-foot">${escapeHtml(item.foot)}</div>
+      </article>`).join("");
+    }
+
+    function getSelectedMetric(card) {
+      return card.metrics.find((metric) => metric.key === card.selected_metric_key) || card.metrics[0];
+    }
+
+    function metricStats(metric, inspectionDate) {
+      const latestPoint = latest(metric.points);
+      return {
+        latestText: latestPoint ? fmtValue(latestPoint.value, metric.unit) : "-",
+        latestDate: inspectionDate ? fmtDate(inspectionDate) : "-"
+      };
+    }
+
+    function updateStats(cardId, metricKey) {
+      const card = cardStore.get(cardId);
+      if (!card) return;
+
+      card.selected_metric_key = metricKey;
+      const metric = getSelectedMetric(card);
+      const stats = metricStats(metric, card.inspection_date);
+      const root = document.querySelector(`[data-card-id="${cardId}"]`);
+      if (!root) return;
+
+      root.querySelector("[data-stat='latest']").textContent = stats.latestText;
+      root.querySelector("[data-stat='date']").textContent = stats.latestDate;
+      root.querySelector("[data-active-label]").textContent = metric.label;
+
+      root.querySelectorAll("[data-metric-key]").forEach((node) => {
+        node.classList.toggle("is-active", node.dataset.metricKey === metricKey);
+      });
+    }
+
+    function buildDates(metrics) {
+      return Array.from(new Set(metrics.flatMap((metric) => metric.points.map((point) => String(point.date)))))
+        .sort((a, b) => a.localeCompare(b));
+    }
+
+    function metricYFactory(metric, pad, plotH) {
+      const values = metric.points.map(pointValue).filter((value) => value !== null);
+      if (!values.length) return () => pad.top + plotH / 2;
+
+      let min = Math.min(...values);
+      let max = Math.max(...values);
+      if (min === max) {
+        min -= 1;
+        max += 1;
+      }
+      const buffer = (max - min) * 0.14;
+      min -= buffer;
+      max += buffer;
+
+      return (value) => pad.top + plotH - ((value - min) / (max - min)) * plotH;
+    }
+
+    function drawChart(card) {
+      const dates = buildDates(card.metrics);
+      const hasValues = card.metrics.some((metric) => metric.points.some((point) => pointValue(point) !== null));
+      if (!dates.length || !hasValues) {
+        return '<div class="empty">暂无本周可用数据</div>';
+      }
+
+      const width = 520;
+      const height = 220;
+      const pad = { left: 24, right: 20, top: 22, bottom: 38 };
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+      const x = (index) => pad.left + (dates.length === 1 ? plotW / 2 : (plotW * index) / (dates.length - 1));
+
+      const grid = [0, 0.5, 1].map((ratio) => {
+        const gy = pad.top + plotH * ratio;
+        return `<line class="grid-line" x1="${pad.left}" y1="${gy}" x2="${width - pad.right}" y2="${gy}"></line>`;
+      }).join("");
+
+      const xLabels = dates.map((date, index) => `<text class="axis" x="${x(index)}" y="${height - 10}" text-anchor="middle">${fmtDate(date)}</text>`).join("");
+
+      const lines = card.metrics.map((metric) => {
+        const byDate = pointsByDate(metric.points);
+        const y = metricYFactory(metric, pad, plotH);
+        const coords = dates.map((date, index) => {
+          const point = byDate.get(date);
+          const value = pointValue(point);
+          return value === null ? null : { date, point, value, x: x(index), y: y(value) };
+        }).filter(Boolean);
+
+        if (!coords.length) return "";
+
+        const path = coords.map((item, index) => `${index === 0 ? "M" : "L"} ${item.x.toFixed(2)} ${item.y.toFixed(2)}`).join(" ");
+        const isActive = metric.key === card.selected_metric_key ? " is-active" : "";
+        const dots = coords.map((item) => {
+          const tooltip = `${metric.label} · ${fmtDate(item.date)} · ${fmtValue(item.value, metric.unit)}`;
+          return `<circle class="trend-point${isActive}" data-card-id="${card.id}" data-metric-key="${escapeHtml(metric.key)}" data-tooltip="${escapeHtml(tooltip)}" cx="${item.x}" cy="${item.y}" r="4" fill="${metric.color}"></circle>`;
+        }).join("");
+
+        return `<path class="trend-line${isActive}" data-card-id="${card.id}" data-metric-key="${escapeHtml(metric.key)}" data-tooltip="${escapeHtml(metric.label)}" d="${path}" stroke="${metric.color}"></path>${dots}`;
+      }).join("");
+
+      return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(card.name)}本周趋势">
+        ${grid}
+        ${lines}
+        ${xLabels}
+      </svg>`;
+    }
+
+    function renderLegend(card) {
+      return `<div class="legend">
+        ${card.metrics.map((metric) => `<button type="button" data-card-id="${card.id}" data-metric-key="${escapeHtml(metric.key)}" class="${metric.key === card.selected_metric_key ? "is-active" : ""}">
+          <span class="swatch" style="background:${metric.color}"></span>
+          <span>${escapeHtml(metric.label)}</span>
+        </button>`).join("")}
+      </div>`;
+    }
+
+	    function renderScreenshot(card) {
+	      if (!card.screenshot) {
+	        return '<div class="screenshot"><div class="screenshot-head"><span>当天巡检截图</span><span>未提供</span></div></div>';
+	      }
+
+	      const label = escapeHtml(card.screenshot_label || "当天巡检截图");
+	      const src = escapeHtml(card.screenshot);
+	      const alt = escapeHtml(`${card.name}当天巡检截图`);
+	      return `<figure class="screenshot">
+	        <figcaption class="screenshot-head">
+	          <span>${label}</span>
+	        </figcaption>
+	        <img src="${src}" alt="${alt}" loading="lazy" data-preview-src="${src}">
+	      </figure>`;
+    }
+
+    function renderAIInspection(report) {
+      const ai = report.ai_inspection || {};
+      const root = document.getElementById("ai-inspection");
+      if (!root) return;
+
+      const users = Array.isArray(ai.users)
+        ? ai.users
+        : (Array.isArray(ai.names) ? ai.names.map((name) => ({ name })) : []);
+      const count = ai.count ?? users.length;
+      const date = ai.date || report.time_range?.end_date || "-";
+      const status = ai.status || "missing";
+
+      const userCards = users.length
+        ? users.map((user) => {
+            const name = escapeHtml(user.name || user["用户姓名"] || user.erp || user["用户erp"] || "-");
+            const erp = escapeHtml(user.erp || user["用户erp"] || "-");
+            const rate = fmtValue(user.ai_code_local_submit_rate ?? user["AI代码本地提交占比"], "%");
+            return `<div class="ai-user">
+              <div class="ai-user-name">${name}</div>
+              <div class="ai-user-meta">ERP：${erp}</div>
+              <div class="ai-user-meta">AI代码本地提交占比：${rate}</div>
+            </div>`;
+          }).join("")
+        : '<div class="empty">当天没有深度用户为否的人员</div>';
+
+	      root.innerHTML = `<div class="ai-head">
+	        <div class="ai-title">
+	          <h2>AI 巡检</h2>
+	          <p>${escapeHtml(date)} 深度用户为否名单</p>
+	          <p>状态：${escapeHtml(status)}</p>
+	        </div>
+        <div class="ai-count">
+          <strong>${escapeHtml(count)}</strong>
+          <span>人</span>
+        </div>
+      </div>
+      <div class="ai-users">${userCards}</div>`;
+    }
+
+    function repairSummaryCountKey(summary) {
+      return Object.keys(summary || {}).find((key) => key.startsWith("筛选延期")) || "筛选延期数";
+    }
+
+    function renderRepairTable(items, columns, emptyText) {
+      if (!items.length) {
+        return `<div class="repair-empty">${escapeHtml(emptyText)}</div>`;
+      }
+
+      const head = columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+      const body = items.map((item) => {
+        const cells = columns.map((column) => {
+          const raw = item[column.key];
+          const value = Array.isArray(raw) ? raw.join("、") : (raw ?? "-");
+          if (column.type === "link" && value && value !== "-") {
+            const href = escapeHtml(value);
+            return `<td><a href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(value)}</a></td>`;
+          }
+          return `<td>${escapeHtml(value)}</td>`;
+        }).join("");
+        return `<tr>${cells}</tr>`;
+      }).join("");
+
+      return `<table class="repair-table">
+        <thead><tr>${head}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>`;
+    }
+
+    function renderRepairOptionalTable(title, items, columns) {
+      if (!items.length) return "";
+      return `<div class="repair-subtitle">${escapeHtml(title)}</div>${renderRepairTable(items, columns, "")}`;
+    }
+
+    function renderRepairInspections(report) {
+      const root = document.getElementById("repair-inspections");
+      if (!root) return;
+
+      const repairs = Array.isArray(report.repair_inspections) ? report.repair_inspections : [];
+      if (!repairs.length) {
+        root.style.display = "none";
+        return;
+      }
+
+      root.style.display = "";
+      const cards = repairs.map((repair) => {
+        const summary = repair.summary || {};
+        const countKey = repairSummaryCountKey(summary);
+        const success = Array.isArray(summary["成功明细"]) ? summary["成功明细"] : [];
+        const failures = Array.isArray(summary["失败明细"]) ? summary["失败明细"] : [];
+        const missing = Array.isArray(summary["缺失字段明细"]) ? summary["缺失字段明细"] : [];
+        const notes = Array.isArray(summary["备注"]) ? summary["备注"].filter(Boolean) : [];
+
+        const stats = [
+          { label: countKey, value: summary[countKey] ?? 0 },
+          { label: "已点击数", value: summary["已点击数"] ?? 0 },
+          { label: "已修复数", value: summary["已修复数"] ?? 0 },
+          { label: "失败数", value: summary["失败数"] ?? 0 }
+        ].map((item) => `<div class="repair-stat">
+          <div class="repair-stat-label">${escapeHtml(item.label)}</div>
+          <div class="repair-stat-value">${escapeHtml(item.value)}</div>
+        </div>`).join("");
+
+        const noteText = notes.length ? `<p>${notes.map(escapeHtml).join("；")}</p>` : "";
+
+        return `<article class="repair-item">
+          <div class="repair-item-head">
+            <div class="repair-item-title">
+              <h3>${escapeHtml(repair.title || "延期修复巡检")}</h3>
+              ${noteText}
+            </div>
+            <div class="repair-status">${escapeHtml(summary["巡检状态"] || "-")}</div>
+            <button type="button" class="icon-button repair-toggle" data-repair-toggle aria-label="收起明细" aria-expanded="true">−</button>
+          </div>
+          <div class="repair-stats">${stats}</div>
+          <div class="repair-details">
+            <div class="repair-subtitle">成功明细</div>
+            ${renderRepairTable(success, [
+              { key: "需求编码", label: "需求编码" },
+              { key: "需求名称", label: "需求名称" },
+              { key: "研发负责人", label: "研发负责人" },
+              { key: "修改字段", label: "修改字段" },
+              { key: "修改后", label: "修改后" },
+              { key: "跳转地址", label: "跳转地址", type: "link" }
+            ], "暂无成功修复明细")}
+            ${renderRepairOptionalTable("失败明细", failures, [
+              { key: "需求编码", label: "需求编码" },
+              { key: "需求名称", label: "需求名称" },
+              { key: "失败原因", label: "失败原因" }
+            ])}
+            ${renderRepairOptionalTable("缺失字段", missing, [
+              { key: "需求编码", label: "需求编码" },
+              { key: "需求名称", label: "需求名称" },
+              { key: "缺失字段", label: "需复核字段" }
+            ])}
+          </div>
+        </article>`;
+      }).join("");
+
+      root.innerHTML = `<div class="repair-head">
+        <div class="repair-title">
+          <h2>延期修复巡检</h2>
+          <p>修复脚本执行结果与需求明细</p>
+        </div>
+        <div class="tag">修复结果</div>
+      </div>
+      <div class="repair-list">${cards}</div>`;
+    }
+
+    function renderContinuousDelivery(report) {
+      const delivery = report.continuous_delivery || {};
+      const root = document.getElementById("continuous-delivery");
+      if (!root) return;
+
+	      const metrics = delivery.metrics || {};
+	      const units = delivery.unit || {};
+	      const source = delivery.source || {};
+	      const date = delivery.date || report.time_range?.end_date || "-";
+	      const status = delivery.status || "missing";
+	      const screenshotSrc = source.query_screenshot || "";
+      const metricDefs = [
+        {
+          key: "team_space_dev_test_online_requirements",
+          label: "团队空间开发测试上线需求数"
+        },
+        {
+          key: "team_space_continuous_delivery_dev_test_online_requirements",
+          label: "团队空间_持需交付_开发测试上线需求数"
+        },
+        {
+          key: "continuous_delivery_team_space_online_requirement_rate",
+          label: "持续交付_团队空间上线需求占比"
+        }
+      ];
+
+      const metricCards = metricDefs.map((metric) => {
+        const unit = units[metric.key] || (metric.key.endsWith("_rate") ? "%" : "count");
+        return `<div class="delivery-metric">
+          <div class="delivery-metric-label">${escapeHtml(metric.label)}</div>
+          <div class="delivery-metric-value">${fmtValue(metrics[metric.key], unit)}</div>
+        </div>`;
+      }).join("");
+
+	      const screenshot = screenshotSrc
+	        ? `<figure class="screenshot">
+	            <figcaption class="screenshot-head">
+	              <span>持续交付当天截图</span>
+	            </figcaption>
+	            <img src="${escapeHtml(screenshotSrc)}" alt="持续交付当天截图" loading="lazy" data-preview-src="${escapeHtml(screenshotSrc)}">
+	          </figure>`
+        : "";
+
+      root.innerHTML = `<div class="delivery-head">
+	        <div class="delivery-title">
+	          <h2>持续交付</h2>
+	          <p>${escapeHtml(date)} 三项核心指标</p>
+	          <p>状态：${escapeHtml(status)}</p>
+	        </div>
+        <div class="tag">当天结果</div>
+      </div>
+      <div class="delivery-metrics">${metricCards}</div>
+      ${screenshot}`;
+    }
+
+    function renderCard(card) {
+      card.selected_metric_key = card.default_metric_key || card.metrics[0]?.key;
+      const activeMetric = getSelectedMetric(card);
+      const stats = metricStats(activeMetric, card.inspection_date);
+      cardStore.set(card.id, card);
+
+      return `<article class="panel" data-card-id="${card.id}">
+        <div class="panel-head">
+          <h2>${escapeHtml(card.name)}</h2>
+          <div class="tag" data-active-label>${escapeHtml(activeMetric.label)}</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-label">最新值</div>
+            <div class="stat-value" data-stat="latest">${stats.latestText}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">最新日期</div>
+            <div class="stat-value" data-stat="date">${stats.latestDate}</div>
+          </div>
+        </div>
+        ${renderLegend(card)}
+        <div class="chart">${drawChart(card)}</div>
+        ${renderScreenshot(card)}
+      </article>`;
+    }
+
+    function bindInteractions() {
+      document.querySelectorAll("[data-card-id][data-metric-key]").forEach((node) => {
+        node.addEventListener("click", () => {
+          updateStats(node.dataset.cardId, node.dataset.metricKey);
+        });
+      });
+
+      bindTooltips();
+      bindImagePreview();
+      bindRepairToggles();
+      bindViewTabs();
+    }
+
+    function bindTooltips() {
+      const tooltip = document.getElementById("chart-tooltip");
+      if (!tooltip) return;
+
+      const move = (event) => {
+        tooltip.style.left = `${event.clientX}px`;
+        tooltip.style.top = `${event.clientY - 14}px`;
+      };
+
+      document.querySelectorAll("[data-tooltip]").forEach((node) => {
+        node.addEventListener("mouseenter", (event) => {
+          tooltip.textContent = node.dataset.tooltip || "";
+          tooltip.classList.add("is-visible");
+          move(event);
+        });
+        node.addEventListener("mousemove", move);
+        node.addEventListener("mouseleave", () => {
+          tooltip.classList.remove("is-visible");
+        });
+      });
+    }
+
+    function bindImagePreview() {
+      const modal = document.getElementById("image-modal");
+      if (!modal) return;
+
+      const image = modal.querySelector("img");
+      const close = () => {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        if (image) image.removeAttribute("src");
+      };
+
+      document.querySelectorAll("[data-preview-src]").forEach((node) => {
+        node.addEventListener("click", () => {
+          if (!image) return;
+          image.src = node.dataset.previewSrc || node.getAttribute("src") || "";
+          image.alt = node.getAttribute("alt") || "";
+          modal.classList.add("is-open");
+          modal.setAttribute("aria-hidden", "false");
+        });
+      });
+
+      modal.querySelector("[data-modal-close]")?.addEventListener("click", close);
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) close();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && modal.classList.contains("is-open")) close();
+      });
+    }
+
+    function bindRepairToggles() {
+      document.querySelectorAll("[data-repair-toggle]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const item = button.closest(".repair-item");
+          if (!item) return;
+          const collapsed = item.classList.toggle("is-collapsed");
+          button.textContent = collapsed ? "+" : "−";
+          button.setAttribute("aria-expanded", String(!collapsed));
+          button.setAttribute("aria-label", collapsed ? "展开明细" : "收起明细");
+        });
+      });
+    }
+
+    function setView(view) {
+      document.querySelectorAll("[data-section]").forEach((section) => {
+        section.hidden = view !== "all" && section.dataset.section !== view;
+      });
+      document.querySelectorAll("[data-view]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.view === view);
+      });
+    }
+
+    function bindViewTabs() {
+      document.querySelectorAll("[data-view]").forEach((button) => {
+        button.addEventListener("click", () => setView(button.dataset.view || "all"));
+      });
+    }
+
+    function render() {
+      const report = window.JOYCLAW_WEEKLY_REPORT || {};
+      const range = report.time_range || {};
+      const charts = document.getElementById("charts");
+      const department = displayDomain(report);
+      const start = range.start_date || "-";
+      const end = range.end_date || "-";
+
+      document.getElementById("department").textContent = department;
+      document.getElementById("date-range").textContent = `${start} 至 ${end}`;
+      document.getElementById("generated-at").textContent = report.generated_at ? `生成时间 ${report.generated_at}` : "生成时间 -";
+
+      const cards = extractCards(report);
+      cardStore.clear();
+      renderOverview(report, cards);
+
+      charts.innerHTML = cards.length
+        ? cards.map(renderCard).join("")
+        : '<article class="panel"><div class="empty">暂无本周巡检 JSON</div></article>';
+
+      renderRepairInspections(report);
+      renderContinuousDelivery(report);
+      renderAIInspection(report);
+      bindInteractions();
+    }
+
+    render();
+  </script>
+</body>
+</html>
