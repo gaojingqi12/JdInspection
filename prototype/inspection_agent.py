@@ -15,6 +15,8 @@ class AgentState(TypedDict, total=False):
     active_session_id: str
     previous_messages: list[dict[str, Any]]
     summary: dict[str, Any]
+    memory: dict[str, Any]
+    intent: dict[str, Any]
     action: str
     ai_config: dict[str, Any]
     answer_parts: list[str]
@@ -43,7 +45,9 @@ class InspectionAgentDeps:
     begin_chat_turn: Callable[[str, str], tuple[str, list[dict[str, Any]]]]
     finish_chat_turn: Callable[[str, str], list[dict[str, Any]]]
     read_summary: Callable[[], dict[str, Any]]
+    read_memory: Callable[..., dict[str, Any]]
     detect_action: Callable[[str], str]
+    route_intent: Callable[[str, dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]], dict[str, Any]]
     is_inspection_related: Callable[[str, str], bool]
     out_of_scope_answer: Callable[[], str]
     action_requires_confirmation: Callable[[str, str], str]
@@ -53,6 +57,7 @@ class InspectionAgentDeps:
     call_chat_model: Callable[[str, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]], str]
     call_chat_model_stream: Callable[[str, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]], Iterable[str]]
     answer_chat: Callable[[str, dict[str, Any], str, str], str]
+    write_memory: Callable[[dict[str, Any]], None]
 
 
 class InspectionAgent:
@@ -148,11 +153,24 @@ class InspectionAgent:
         session_id = str(state.get("session_id") or "")
         active_session_id, previous_messages = self.deps.begin_chat_turn(message, session_id)
         summary = self.deps.read_summary()
+        memory = self.deps.read_memory(active_session_id)
         action = self.deps.detect_action(message)
+        intent = {"action": action, "source": "rules"}
+        if action == "none":
+            intent = self.deps.route_intent(
+                message,
+                summary,
+                self.deps.read_memory(active_session_id, True),
+                state.get("ai_config") or {},
+                previous_messages,
+            )
+            action = str(intent.get("action") or "none")
         return {
             "active_session_id": active_session_id,
             "previous_messages": previous_messages,
             "summary": summary,
+            "memory": memory,
+            "intent": intent,
             "action": action,
         }
 
@@ -207,11 +225,13 @@ class InspectionAgent:
         summary = state.get("summary") or {}
         model_answer = ""
         try:
+            ai_config = dict(state.get("ai_config") or {})
+            ai_config["_session_id"] = str(state.get("active_session_id") or "")
             model_answer = self.deps.call_chat_model(
                 message,
                 action,
                 summary,
-                state.get("ai_config") or {},
+                ai_config,
                 state.get("previous_messages") or [],
             )
         except Exception as exc:
@@ -232,11 +252,13 @@ class InspectionAgent:
         self._wait_for_action_job(state)
 
         try:
+            ai_config = dict(state.get("ai_config") or {})
+            ai_config["_session_id"] = str(state.get("active_session_id") or "")
             for chunk in self.deps.call_chat_model_stream(
                 str(state.get("message") or ""),
                 action,
                 state.get("summary") or {},
-                state.get("ai_config") or {},
+                ai_config,
                 state.get("previous_messages") or [],
             ):
                 state["streamed"] = True
@@ -297,4 +319,5 @@ class InspectionAgent:
         }
         if state.get("confirmation_required"):
             result["confirmation_required"] = str(state["confirmation_required"])
+        self.deps.write_memory(dict(state))
         return result

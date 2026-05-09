@@ -588,14 +588,30 @@ function renderChatSessions() {
   $("chatSessions").innerHTML = sessions.length
     ? sessions.map((session) => `
       <button class="chat-session ${session.id === state.currentChatSessionId ? "active" : ""}" type="button" data-session-id="${escapeHtml(session.id)}" title="${escapeHtml(session.title || "新对话")}">
-        <span class="chat-session-title">${escapeHtml(session.title || "新对话")}</span>
-        <span class="chat-session-meta">${escapeHtml(formatChatTime(session.updated_at))} · ${session.message_count ? `${escapeHtml(session.message_count)} 条` : "未开始"}</span>
+        <span class="chat-session-copy">
+          <span class="chat-session-title">${escapeHtml(session.title || "新对话")}</span>
+          <span class="chat-session-meta">${escapeHtml(formatChatTime(session.updated_at))} · ${session.message_count ? `${escapeHtml(session.message_count)} 条` : "未开始"}</span>
+        </span>
+        <span class="chat-session-delete" role="button" tabindex="0" data-delete-session-id="${escapeHtml(session.id)}" aria-label="删除对话" title="删除对话">×</span>
       </button>
     `).join("")
     : `<div class="list-item">暂无历史</div>`;
   document.querySelectorAll(".chat-session").forEach((button) => {
     button.addEventListener("click", async () => {
       await loadChatSession(button.dataset.sessionId || "");
+    });
+  });
+  document.querySelectorAll("[data-delete-session-id]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await deleteChatSession(button.dataset.deleteSessionId || "");
+    });
+    button.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      await deleteChatSession(button.dataset.deleteSessionId || "");
     });
   });
 }
@@ -634,6 +650,7 @@ async function loadChatSession(sessionId) {
   if (!res.ok) return;
   const payload = await res.json();
   state.currentChatSessionId = payload.session?.id || sessionId;
+  state.chatSessions = payload.sessions || state.chatSessions;
   renderMessages(payload.session?.messages || []);
   renderChatSessions();
 }
@@ -646,6 +663,31 @@ async function createChatSession() {
   state.currentChatSessionId = payload.session?.id || "";
   renderChatSessions();
   renderMessages(payload.session?.messages || []);
+}
+
+async function deleteChatSession(sessionId) {
+  if (!sessionId) return;
+  const ok = await openConfirmModal({
+    title: "删除对话",
+    description: "删除后将移除这条对话记录。",
+    confirmText: "确认删除",
+  });
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      appendMessage("assistant", "删除对话失败，请刷新页面后重试。");
+      return;
+    }
+    const payload = await res.json();
+    state.chatSessions = payload.sessions || [];
+    state.currentChatSessionId = payload.active_session_id || payload.session?.id || "";
+    renderChatSessions();
+    renderMessages(payload.session?.messages || []);
+  } catch {
+    appendMessage("assistant", "删除对话失败，请检查服务是否正在运行。");
+  }
 }
 
 async function clearChat() {

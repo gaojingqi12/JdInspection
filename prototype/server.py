@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
+from agent_memory import load_memory, save_memory, summarize_for_prompt, update_memory_from_turn
 from actions import (
     JOBS,
     JOB_LOCK,
@@ -38,6 +39,7 @@ DEFAULT_MODEL = "mimo-v2.5-pro"
 DEFAULT_API_KEY = ""
 CHAT_HISTORY_PATH = Path(__file__).resolve().parent / "data" / "chat-history.json"
 AI_CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ai-config.json"
+AGENT_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "agent-memory.json"
 CHAT_LOCK = threading.Lock()
 AI_CONFIG_LOCK = threading.Lock()
 
@@ -1733,7 +1735,11 @@ def daily_inspection_assessment(summary: dict) -> dict:
     return daily_inspection_renderer().daily_inspection_assessment(summary)
 
 
-def chat_model_context(summary: dict) -> dict:
+def read_agent_memory(session_id: str = "", lightweight: bool = False) -> dict:
+    return summarize_for_prompt(load_memory(AGENT_MEMORY_PATH), session_id, lightweight=lightweight)
+
+
+def chat_model_context(summary: dict, session_id: str = "") -> dict:
     return {
         "inspection_date": summary.get("inspection_date"),
         "status": summary.get("status"),
@@ -1741,6 +1747,7 @@ def chat_model_context(summary: dict) -> dict:
         "display_domain": summary.get("display_domain"),
         "overview": build_overview(summary)[:10],
         "daily_inspection_assessment": daily_inspection_assessment(summary),
+        "agent_memory": read_agent_memory(session_id),
     }
 
 
@@ -1752,6 +1759,125 @@ SYSTEM_PROMPT = (
     "当用户询问日常巡检、今日巡检结果、异常/风险概览或报备草稿时，必须严格按照 daily_inspection_assessment.selected_template 输出。"
     "不在阈值内的指标已经用警示标识标注，不得修改标识、数值、顺序和模板结构。"
 )
+
+
+def recent_model_history(history_messages: list[dict] | None, limit: int = 8) -> list[dict]:
+    return [
+        {
+            "role": item.get("role") if item.get("role") in ("user", "assistant") else "user",
+            "content": str(item.get("content") or "")[:1200],
+        }
+        for item in (history_messages or [])[-limit:]
+        if item.get("content")
+    ]
+
+
+INTENT_ROUTER_PROMPT = (
+    "你是巡检助手的意图路由器。只能输出 JSON，不要输出解释。"
+    "根据用户消息、历史对话、巡检摘要和记忆，从候选 action 中选择一个。"
+    "如果用户只是询问数据、状态、总结、风险或继续上下文，action 输出 none。"
+    "如果用户表达要执行巡检、修复、刷新报告、生成周报文案或日期调整，输出对应 action。"
+)
+
+
+def extract_json_object(text: str) -> dict:
+    raw = (text or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end <= start:
+        return {}
+    try:
+        parsed = json.loads(raw[start : end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def route_intent_with_model(
+    message: str,
+    summary: dict,
+    memory: dict,
+    client_config: dict,
+    history_messages: list[dict] | None = None,
+) -> dict:
+    fallback = {"action": detect_action(message), "source": "rules"}
+    config = merged_ai_config(client_config)
+    api_key = str(config.get("api_key") or "").strip()
+    if not api_key:
+        return fallback
+
+    actions = [
+        {
+            "id": action_id,
+            "title": item.get("title"),
+            "description": item.get("description"),
+            "risk": item.get("risk"),
+            "confirm_phrase": item.get("confirm_phrase", ""),
+        }
+        for action_id, item in action_registry().items()
+    ]
+    recent_history = recent_model_history(history_messages, limit=6)
+    context = {
+        "inspection_date": summary.get("inspection_date"),
+        "display_domain": summary.get("display_domain"),
+        "daily_inspection_status": daily_inspection_assessment(summary).get("status"),
+        "memory": memory,
+        "actions": actions,
+    }
+    payload = {
+        "model": str(config.get("model") or DEFAULT_MODEL).strip(),
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": INTENT_ROUTER_PROMPT},
+            *recent_history,
+            {
+                "role": "user",
+                "content": (
+                    f"用户消息：{message}\n"
+                    f"上下文 JSON：{json.dumps(context, ensure_ascii=False)}\n"
+                    "请输出 JSON："
+                    '{"action":"none 或候选 action id","confidence":0到1,"reason":"一句话原因"}'
+                ),
+            },
+        ],
+    }
+    request = Request(
+        f"{str(config.get('base_url') or DEFAULT_BASE_URL).strip().rstrip('/')}/chat/completions",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        return {**fallback, "router_error": str(exc)}
+
+    choices = body.get("choices") or []
+    if not choices:
+        return fallback
+    content = str((choices[0].get("message") or {}).get("content") or "")
+    routed = extract_json_object(content)
+    action = str(routed.get("action") or "none").strip()
+    if action not in action_registry():
+        action = "none"
+    return {
+        "action": action,
+        "confidence": routed.get("confidence"),
+        "reason": str(routed.get("reason") or ""),
+        "source": "llm-router",
+    }
 
 
 def call_chat_model(message: str, action: str, summary: dict, client_config: dict, history_messages: list[dict] | None = None) -> str:
@@ -1769,15 +1895,8 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
     action_text = {
         "none": "用户没有明确要求启动脚本，只是在询问巡检数据或对话。",
     }.get(action, f"用户想启动动作：{action_title(action)}。")
-    context = chat_model_context(summary)
-    recent_history = [
-        {
-            "role": item.get("role") if item.get("role") in ("user", "assistant") else "user",
-            "content": str(item.get("content") or ""),
-        }
-        for item in (history_messages or [])[-8:]
-        if item.get("content")
-    ]
+    context = chat_model_context(summary, str(client_config.get("_session_id") or ""))
+    recent_history = recent_model_history(history_messages, limit=8)
     model_messages = [
         {
             "role": "system",
@@ -1836,15 +1955,8 @@ def call_chat_model_stream(message: str, action: str, summary: dict, client_conf
     action_text = {
         "none": "用户没有明确要求启动脚本，只是在询问巡检数据或对话。",
     }.get(action, f"用户想启动动作：{action_title(action)}。")
-    context = chat_model_context(summary)
-    recent_history = [
-        {
-            "role": item.get("role") if item.get("role") in ("user", "assistant") else "user",
-            "content": str(item.get("content") or ""),
-        }
-        for item in (history_messages or [])[-8:]
-        if item.get("content")
-    ]
+    context = chat_model_context(summary, str(client_config.get("_session_id") or ""))
+    recent_history = recent_model_history(history_messages, limit=8)
     payload = {
         "model": model,
         "temperature": 0.2,
@@ -2749,6 +2861,50 @@ def answer_chat(message: str, summary: dict, action: str = "none", model_answer:
     )
 
 
+def repair_memory_items(summary: dict) -> list[dict]:
+    items: list[dict] = []
+    for repair in summary.get("repair_inspections", []):
+        repair_summary = repair.get("summary") or {}
+        details = repair_summary.get("成功明细") or []
+        if not isinstance(details, list):
+            details = []
+        count = repair_summary.get("筛选延期提测数", repair_summary.get("筛选延期上线数", 0))
+        success_count = repair_summary.get("已修复数", 0)
+        failed_count = repair_summary.get("失败数", 0)
+        if not (count or success_count or failed_count or details):
+            continue
+        items.append(
+            {
+                "repair_type": repair.get("repair_type"),
+                "title": repair.get("title"),
+                "status": repair_summary.get("巡检状态"),
+                "count": count,
+                "success_count": success_count,
+                "failed_count": failed_count,
+                "details": [
+                    {
+                        "code": item.get("需求编码"),
+                        "name": item.get("需求名称"),
+                        "owner": item.get("研发负责人"),
+                        "url": item.get("跳转地址") or item.get("页面URL"),
+                    }
+                    for item in details
+                    if isinstance(item, dict)
+                ],
+            }
+        )
+    return items
+
+
+def write_agent_memory_from_state(state: dict) -> None:
+    summary = state.get("summary") or {}
+    assessment = daily_inspection_assessment(summary) if summary else {}
+    memory = load_memory(AGENT_MEMORY_PATH)
+    repairs = repair_memory_items(summary)
+    memory = update_memory_from_turn(memory, state, assessment, repairs)
+    save_memory(AGENT_MEMORY_PATH, memory)
+
+
 _INSPECTION_AGENT: InspectionAgent | None = None
 
 
@@ -2760,7 +2916,9 @@ def inspection_agent() -> InspectionAgent:
                 begin_chat_turn=begin_chat_turn,
                 finish_chat_turn=finish_chat_turn,
                 read_summary=lambda: read_json(SUMMARY_PATH, {}),
+                read_memory=read_agent_memory,
                 detect_action=detect_action,
+                route_intent=route_intent_with_model,
                 is_inspection_related=is_inspection_related,
                 out_of_scope_answer=out_of_scope_answer,
                 action_requires_confirmation=action_requires_confirmation,
@@ -2770,6 +2928,7 @@ def inspection_agent() -> InspectionAgent:
                 call_chat_model=call_chat_model,
                 call_chat_model_stream=call_chat_model_stream,
                 answer_chat=answer_chat,
+                write_memory=write_agent_memory_from_state,
             )
         )
     return _INSPECTION_AGENT
@@ -2826,9 +2985,18 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             with CHAT_LOCK:
                 store = load_chat_store()
                 session = find_chat_session(store, session_id)
+                if session:
+                    store["active_session_id"] = session["id"]
+                    save_chat_store(store)
             if not session:
                 return self.send_error(404)
-            return self.write_json({"session": session})
+            return self.write_json(
+                {
+                    "session": session,
+                    "sessions": sorted_chat_sessions(store),
+                    "active_session_id": store.get("active_session_id") or "",
+                }
+            )
         if path == "/api/jobs":
             with JOB_LOCK:
                 jobs = sorted(JOBS.values(), key=lambda item: item.get("created_at", ""), reverse=True)
@@ -2951,6 +3119,47 @@ class PrototypeHandler(BaseHTTPRequestHandler):
         for event, event_payload in inspection_agent().stream(payload):
             self.write_sse(event, event_payload)
         return None
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if not parsed.path.startswith("/api/chat/sessions/"):
+            return self.send_error(404)
+
+        session_id = parsed.path.removeprefix("/api/chat/sessions/").strip("/")
+        if not session_id:
+            return self.send_error(404)
+
+        with CHAT_LOCK:
+            store = load_chat_store()
+            sessions = store.get("sessions") or []
+            next_sessions = [session for session in sessions if session.get("id") != session_id]
+            if len(next_sessions) == len(sessions):
+                return self.send_error(404)
+
+            store["sessions"] = next_sessions
+            active_session_id = store.get("active_session_id") or ""
+            if active_session_id == session_id:
+                if next_sessions:
+                    replacement = sorted(next_sessions, key=lambda item: item.get("updated_at", ""), reverse=True)[0]
+                else:
+                    replacement = create_chat_session(store)
+                store["active_session_id"] = replacement.get("id") or ""
+            elif not next_sessions:
+                replacement = create_chat_session(store)
+                store["active_session_id"] = replacement.get("id") or ""
+
+            active_session = find_chat_session(store, store.get("active_session_id") or "")
+            save_chat_store(store)
+
+        return self.write_json(
+            {
+                "ok": True,
+                "deleted_session_id": session_id,
+                "session": active_session,
+                "sessions": sorted_chat_sessions(store),
+                "active_session_id": store.get("active_session_id") or "",
+            }
+        )
 
     def write_sse(self, event: str, payload: dict):
         data = json.dumps(payload, ensure_ascii=False)
