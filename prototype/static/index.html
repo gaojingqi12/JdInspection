@@ -21,18 +21,6 @@
     </header>
 
     <section class="command-bar" aria-label="actions">
-      <div class="command-group inspection-group">
-        <div class="command-label">巡检操作</div>
-        <div class="toolbar">
-          <button id="refreshBtn" class="primary-command" type="button" data-confirm-title="刷新数据">刷新数据</button>
-          <button type="button" data-prompt="帮我日常巡检" data-confirm-title="日常巡检">日常巡检</button>
-          <button type="button" data-prompt="周度巡检" data-confirm-title="周度巡检">周度巡检</button>
-          <button class="repair-command" type="button" data-action="repair_delayed_test" data-confirm-title="修复提测">修复提测</button>
-          <button class="repair-command" type="button" data-action="repair_delayed_online" data-confirm-title="修复上线">修复上线</button>
-          <button type="button" data-prompt="今天有哪些异常和风险？" data-confirm-title="风险点">风险点</button>
-          <button type="button" data-prompt="帮我生成一段报备草稿" data-confirm-title="报备草稿">报备草稿</button>
-        </div>
-      </div>
       <div class="command-group report-group">
         <div class="command-label">查看报告</div>
         <div class="report-links">
@@ -40,6 +28,19 @@
           <a class="button-link" href="/reports/weekly">周度报告</a>
           <a class="button-link" href="/reports/repair">修复报告</a>
           <a class="button-link" href="/reports/thursday">日期调整</a>
+        </div>
+      </div>
+      <div class="command-group inspection-group">
+        <div class="command-label">巡检操作</div>
+        <div class="toolbar">
+          <button id="refreshBtn" class="primary-command" type="button" data-confirm-title="刷新数据">刷新数据</button>
+          <button id="syncStaticBtn" class="sync-public-btn" type="button">同步展示页</button>
+          <button type="button" data-prompt="帮我日常巡检" data-confirm-title="日常巡检">日常巡检</button>
+          <button type="button" data-prompt="周度巡检" data-confirm-title="周度巡检">周度巡检</button>
+          <button class="repair-command" type="button" data-action="repair_delayed_test" data-confirm-title="修复提测">修复提测</button>
+          <button class="repair-command" type="button" data-action="repair_delayed_online" data-confirm-title="修复上线">修复上线</button>
+          <button type="button" data-prompt="今天有哪些异常和风险？" data-confirm-title="风险点">风险点</button>
+          <button type="button" data-prompt="帮我生成一段报备草稿" data-confirm-title="报备草稿">报备草稿</button>
         </div>
       </div>
       <span id="loadedAt" class="muted"></span>

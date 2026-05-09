@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>收银台&内单交易域静态展示页</title>
+  <link rel="stylesheet" href="./prototype/static/styles.css" />
+  <style>
+    body {
+      background-image:
+        linear-gradient(135deg, rgba(9, 21, 35, 0.92), rgba(12, 72, 67, 0.82)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 21, 35, 0.22)),
+        url("./prototype/static/assets/page-background.png") !important;
+    }
+    .public-command-bar {
+      grid-template-columns: minmax(0, 1fr);
+      margin-bottom: 18px;
+    }
+    .public-command-bar::before,
+    .public-ai-section::before {
+      display: none;
+    }
+    .public-command-bar .report-group {
+      min-height: 0;
+    }
+    .public-command-bar .report-links {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .public-command-bar .button-link {
+      display: flex;
+      width: 100%;
+      min-height: 74px;
+      justify-content: flex-start;
+      align-items: flex-start;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.08));
+      border-color: rgba(255,255,255,0.18);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.06),
+        0 12px 28px rgba(9, 21, 35, 0.12);
+      text-decoration: none;
+    }
+    .public-command-bar .button-link:hover {
+      transform: translateY(-4px);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        0 24px 42px rgba(16, 36, 63, 0.24);
+      text-decoration: none;
+    }
+    .public-report-link-inner {
+      display: grid;
+      gap: 6px;
+      width: 100%;
+    }
+    .public-report-link-kicker {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.78);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+    .public-report-link-title {
+      color: #fff;
+      font-size: 20px;
+      line-height: 1.18;
+      font-weight: 800;
+    }
+    .public-report-link-desc {
+      color: rgba(255,255,255,0.72);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .public-report-link-inner::after {
+      content: "打开报告";
+      color: rgba(255,255,255,0.62);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .static-lower-grid {
+      grid-template-columns: 1fr;
+      margin-top: 18px;
+    }
+    .public-ai-section .panel-head {
+      padding-bottom: 8px;
+    }
+    .public-ai-section #publicAiMeta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .public-ai-grid {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+    .public-ai-grid .ai-user-pill {
+      width: auto;
+      max-width: min(280px, 100%);
+      justify-content: flex-start;
+      flex: 0 0 auto;
+    }
+    .public-ai-grid .ai-user-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .public-chart-note {
+      color: #6a7783;
+      font-size: 15px;
+      line-height: 1.7;
+      margin-top: 6px;
+    }
+    .chart-panel .panel-head {
+      padding-bottom: 6px;
+    }
+    .public-trend-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.76fr) minmax(0, 1.24fr);
+      gap: 22px;
+      padding: 0 18px 20px;
+      align-items: stretch;
+    }
+    .public-trend-deck {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(3, minmax(126px, auto));
+      gap: 10px;
+      align-content: start;
+      height: auto;
+    }
+    .public-trend-visual {
+      grid-column: 1 / -1;
+      margin: 2px 0 0;
+      border: 1px solid rgba(201, 214, 225, 0.92);
+      border-radius: 18px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #ffffff, #f8fbfd);
+      box-shadow:
+        0 18px 34px rgba(23, 33, 43, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.9);
+    }
+    .public-trend-visual img {
+      display: block;
+      width: 100%;
+      height: 320px;
+      object-fit: cover;
+      object-position: center;
+      opacity: 0.96;
+    }
+    .public-trend-stack-card {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto auto auto;
+      gap: 9px;
+      width: 100%;
+      min-height: 126px;
+      height: auto;
+      padding: 12px 14px 12px;
+      border: 1px solid rgba(201, 214, 225, 0.92);
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(36, 111, 168, 0.04), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,253,0.96));
+      color: var(--ink);
+      text-align: left;
+      box-shadow:
+        0 16px 34px rgba(23, 33, 43, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.88);
+      transition:
+        transform 220ms cubic-bezier(0.2, 0.85, 0.28, 1.12),
+        box-shadow 220ms ease,
+        border-color 220ms ease,
+        background 220ms ease;
+    }
+    .public-trend-stack-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(36, 111, 168, 0.22);
+      box-shadow: 0 26px 44px rgba(23, 33, 43, 0.12);
+    }
+    .public-trend-stack-card.active {
+      border-color: rgba(36, 111, 168, 0.28);
+      background:
+        radial-gradient(circle at 100% 0%, rgba(36, 111, 168, 0.08), transparent 38%),
+        linear-gradient(180deg, #ffffff, #f9fbfd);
+      box-shadow:
+        0 30px 52px rgba(23, 33, 43, 0.14),
+        inset 0 1px 0 rgba(255,255,255,0.92);
+      transform: translateY(-2px);
+    }
+    .public-trend-stack-card.active::after {
+      content: "";
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 0;
+      height: 3px;
+      border-radius: 999px 999px 0 0;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+    }
+    .public-trend-stack-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .public-trend-stack-kicker {
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: rgba(237, 244, 251, 0.92);
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 760;
+    }
+    .public-trend-stack-index {
+      color: #8b98a5;
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0.08em;
+    }
+    .public-trend-stack-title {
+      font-size: 15px;
+      line-height: 1.32;
+      font-weight: 800;
+      color: #1c2835;
+    }
+    .public-trend-stack-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+      padding-top: 2px;
+    }
+    .public-trend-stack-value {
+      font-size: 25px;
+      line-height: 1;
+      font-weight: 800;
+      color: #152332;
+    }
+    .public-trend-stack-meta {
+      color: #6b7987;
+      font-size: 11px;
+      line-height: 1.4;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .public-trend-stage {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 14px;
+      padding: 18px 18px 16px;
+      border: 1px solid rgba(198, 212, 225, 0.92);
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(36, 111, 168, 0.06), transparent 34%),
+        linear-gradient(180deg, #ffffff, #fbfcfe);
+      box-shadow:
+        0 24px 54px rgba(23, 33, 43, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.94);
+    }
+    .public-trend-stage-kicker {
+      color: #728090;
+      font-size: 12px;
+      font-weight: 760;
+      margin-bottom: 8px;
+    }
+    .public-trend-stage-title {
+      color: #17222f;
+      font-size: 24px;
+      line-height: 1.08;
+      font-weight: 820;
+    }
+    .public-trend-stage-meta {
+      color: #6b7987;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+    .public-trend-stage-stats {
+      display: grid;
+      grid-template-columns: minmax(120px, 0.56fr) minmax(280px, 1.58fr) minmax(120px, 0.56fr);
+      gap: 10px;
+    }
+    .public-trend-stage-stat {
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid rgba(217, 225, 231, 0.95);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,251,253,0.86));
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.9),
+        0 10px 22px rgba(23, 33, 43, 0.04);
+    }
+    .public-trend-stage-stat span {
+      display: block;
+      color: #708090;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .public-trend-stage-stat strong {
+      display: block;
+      color: #162433;
+      font-size: 18px;
+      line-height: 1.1;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .public-trend-stage-canvas {
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      border: 1px solid rgba(227, 234, 240, 0.96);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(250,252,253,0.94));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.92);
+      padding: 10px 10px 2px;
+    }
+    .public-trend-stage-canvas canvas {
+      height: 100%;
+      min-height: 420px;
+    }
+    @media (max-width: 900px) {
+      .public-command-bar .report-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .public-trend-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 760px) {
+      .public-command-bar .report-links {
+        grid-template-columns: 1fr;
+      }
+      .public-trend-layout {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      .public-trend-deck {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+        height: auto;
+      }
+      .public-trend-visual {
+        grid-column: auto;
+      }
+      .public-trend-visual img {
+        height: 190px;
+      }
+      .public-trend-stack-card,
+      .public-trend-stack-card.active {
+        width: 100%;
+        transform: none;
+      }
+      .public-trend-stack-title {
+        font-size: 16px;
+      }
+      .public-trend-stack-value {
+        font-size: 24px;
+      }
+      .public-trend-stage {
+        padding: 18px 16px 14px;
+      }
+      .public-trend-stage-title {
+        font-size: 23px;
+      }
+      .public-trend-stage-stats {
+        grid-template-columns: 1fr;
+      }
+      .public-trend-stage-canvas canvas {
+        min-height: 360px;
+      }
+      .public-ai-grid .ai-user-pill {
+        max-width: 100%;
+      }
+    }
+</style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar hero-panel">
+      <div>
+        <div class="eyebrow">收银台&内单交易域</div>
+        <h1>收银台&内单交易域静态展示页</h1>
+      </div>
+      <div class="header-meta">
+        <span>收银台&amp;内单交易域</span>
+        <span>2026-05-04 ~ 2026-05-08</span>
+      </div>
+    </header>
+
+    <section class="command-bar public-command-bar">
+      <div class="command-group report-group">
+        <div class="command-label">查看报告</div>
+        <div class="report-links">
+            <a class="button-link" href="./daily-report.html">
+              <span class="public-report-link-inner">
+                <span class="public-report-link-kicker">日常</span>
+                <span class="public-report-link-title">日常巡检报告</span>
+                <span class="public-report-link-desc">查看日常 OKR、AI 与持续交付巡检结果。</span>
+              </span>
+            </a>
+            
+            <a class="button-link" href="./weekly-report.html">
+              <span class="public-report-link-inner">
+                <span class="public-report-link-kicker">周度</span>
+                <span class="public-report-link-title">周度巡检报告</span>
+                <span class="public-report-link-desc">查看周度 INE 指标汇总与团队分布明细。</span>
+              </span>
+            </a>
+            
+            <a class="button-link" href="./repair-report.html">
+              <span class="public-report-link-inner">
+                <span class="public-report-link-kicker">修复</span>
+                <span class="public-report-link-title">修复巡检报告</span>
+                <span class="public-report-link-desc">查看延期提测、延期上线修复筛选与结果。</span>
+              </span>
+            </a>
+            
+            <a class="button-link" href="./thursday-report.html">
+              <span class="public-report-link-inner">
+                <span class="public-report-link-kicker">日期调整</span>
+                <span class="public-report-link-title">计划日期调整报告</span>
+                <span class="public-report-link-desc">查看计划日期调整执行情况与明细记录。</span>
+              </span>
+            </a>
+            </div>
+      </div>
+    </section>
+
+    <section id="dashboard" class="metric-grid">
+            <article class="metric-card metric-delay_test_rate has-preview">
+              <div class="metric-topline">
+                <span class="metric-caption">OKR 指标</span>
+              </div>
+              <div class="metric-label">延期提测率</div>
+              <div class="metric-value">0%</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>延期提测率-周（5-&gt;4）-汇总-C3维度</span>
+              </div>
+              
+              <div class="metric-preview">
+                <div class="metric-preview-label">巡检截图</div>
+                <img
+                  src="./prototype/static/assets/delay_test_rate.png"
+                  alt="延期提测率巡检截图"
+                  loading="lazy"
+                  data-preview-full="./prototype/static/assets/delay_test_rate.png"
+                  data-preview-title="延期提测率"
+                />
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-delay_online_rate has-preview">
+              <div class="metric-topline">
+                <span class="metric-caption">OKR 指标</span>
+              </div>
+              <div class="metric-label">延期上线率</div>
+              <div class="metric-value">2.7%</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>延期上线率-周（5-&gt;4）-汇总-C3维度</span>
+              </div>
+              
+              <div class="metric-preview">
+                <div class="metric-preview-label">巡检截图</div>
+                <img
+                  src="./prototype/static/assets/delay_online_rate.png"
+                  alt="延期上线率巡检截图"
+                  loading="lazy"
+                  data-preview-full="./prototype/static/assets/delay_online_rate.png"
+                  data-preview-title="延期上线率"
+                />
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-technical_refactor_working_hours has-preview">
+              <div class="metric-topline">
+                <span class="metric-caption">OKR 指标</span>
+              </div>
+              <div class="metric-label">技术改造工时占比</div>
+              <div class="metric-value">1.88%</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>技术改造工时占比-周（5-&gt;4）-汇总-C3维度</span>
+              </div>
+              
+              <div class="metric-preview">
+                <div class="metric-preview-label">巡检截图</div>
+                <img
+                  src="./prototype/static/assets/technical_refactor_working_hours.png"
+                  alt="技术改造工时占比巡检截图"
+                  loading="lazy"
+                  data-preview-full="./prototype/static/assets/technical_refactor_working_hours.png"
+                  data-preview-title="技术改造工时占比"
+                />
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-bi_weekly_delivery_rate has-preview">
+              <div class="metric-topline">
+                <span class="metric-caption">OKR 指标</span>
+              </div>
+              <div class="metric-label">双周交付率</div>
+              <div class="metric-value">48.72%</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>双周交付率</span>
+              </div>
+              
+              <div class="metric-preview">
+                <div class="metric-preview-label">巡检截图</div>
+                <img
+                  src="./prototype/static/assets/bi_weekly_delivery_rate.png"
+                  alt="双周交付率巡检截图"
+                  loading="lazy"
+                  data-preview-full="./prototype/static/assets/bi_weekly_delivery_rate.png"
+                  data-preview-title="双周交付率"
+                />
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-delay_test_rate">
+              <div class="metric-topline">
+                <span class="metric-caption">修复筛选</span>
+              </div>
+              <div class="metric-label">提测待处理</div>
+              <div class="metric-value">0 <span class="muted">个</span></div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>收银台&amp;内单交易域修复筛选结果</span>
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-delay_online_rate">
+              <div class="metric-topline">
+                <span class="metric-caption">修复筛选</span>
+              </div>
+              <div class="metric-label">上线待处理</div>
+              <div class="metric-value">0 <span class="muted">个</span></div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>收银台&amp;内单交易域修复筛选结果</span>
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-continuous_delivery">
+              <div class="metric-topline">
+                <span class="metric-caption">交付结构</span>
+              </div>
+              <div class="metric-label">持续交付占比</div>
+              <div class="metric-value">87.5%</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>持续交付</span>
+              </div>
+              
+            </article>
+            
+            <article class="metric-card metric-ai">
+              <div class="metric-topline">
+                <span class="metric-caption">AI 使用</span>
+              </div>
+              <div class="metric-label">AI 非深度用户数</div>
+              <div class="metric-value">25</div>
+              <div class="metric-foot">
+                <span>2026-05-08</span>
+                <span>AI 深度用户占比 - 软开测试岗</span>
+              </div>
+              
+            </article>
+            </section>
+
+    <section class="workspace">
+      <div class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>本周趋势</h2>
+          </div>
+        </div>
+        <div class="public-trend-layout">
+          <div class="public-trend-deck">
+            
+            <button
+              class="public-trend-stack-card"
+              type="button"
+              data-chart-option="delay_test_rate:delayed_test_requirements"
+              style="--stack-shift: 0px; z-index: 100;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">01</span>
+              </span>
+              <strong class="public-trend-stack-title">延期提测需求数</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">0</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <button
+              class="public-trend-stack-card"
+              type="button"
+              data-chart-option="delay_online_rate:delayed_online_requirements"
+              style="--stack-shift: 14px; z-index: 99;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">02</span>
+              </span>
+              <strong class="public-trend-stack-title">延期上线需求数</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">0</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <button
+              class="public-trend-stack-card active"
+              type="button"
+              data-chart-option="technical_refactor_working_hours:technical_refactor_working_hours_rate"
+              style="--stack-shift: 28px; z-index: 98;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">03</span>
+              </span>
+              <strong class="public-trend-stack-title">技术改造工时占比</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">1.88%</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <button
+              class="public-trend-stack-card"
+              type="button"
+              data-chart-option="bi_weekly_delivery_rate:biweekly_delivery_rate"
+              style="--stack-shift: 42px; z-index: 97;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">04</span>
+              </span>
+              <strong class="public-trend-stack-title">双周交付率</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">48.72%</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <button
+              class="public-trend-stack-card"
+              type="button"
+              data-chart-option="ai_inspection:ai_non_deep_users"
+              style="--stack-shift: 56px; z-index: 96;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">05</span>
+              </span>
+              <strong class="public-trend-stack-title">AI 深度用户为否</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">25</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <button
+              class="public-trend-stack-card"
+              type="button"
+              data-chart-option="continuous_delivery:continuous_delivery_team_space_online_requirement_rate"
+              style="--stack-shift: 70px; z-index: 95;"
+            >
+              <span class="public-trend-stack-head">
+                <span class="public-trend-stack-kicker">指标细节</span>
+                <span class="public-trend-stack-index">06</span>
+              </span>
+              <strong class="public-trend-stack-title">持续交付占比</strong>
+              <span class="public-trend-stack-foot">
+                <span class="public-trend-stack-value">87.5%</span>
+                <span class="public-trend-stack-meta">2026-05-08</span>
+              </span>
+            </button>
+            
+            <figure class="public-trend-visual" aria-hidden="true">
+              <img src="./prototype/static/assets/static-trend-illustration.png" alt="" loading="lazy" />
+            </figure>
+          </div>
+          <div class="public-trend-stage" data-active-chart="technical_refactor_working_hours:technical_refactor_working_hours_rate">
+            <div class="public-trend-stage-copy">
+              <div class="public-trend-stage-kicker">当前细节</div>
+              <div class="public-trend-stage-title" id="publicTrendTitle">技术改造工时占比</div>
+              <div class="public-trend-stage-meta" id="publicTrendMeta">最新值 1.88% / 2026-05-08</div>
+            </div>
+            <div class="public-trend-stage-stats">
+              <div class="public-trend-stage-stat">
+                <span>最新值</span>
+                <strong id="publicTrendLatest">1.88%</strong>
+              </div>
+              <div class="public-trend-stage-stat">
+                <span>时间范围</span>
+                <strong id="publicTrendRange">2026-05-06 ~ 2026-05-08</strong>
+              </div>
+              <div class="public-trend-stage-stat">
+                <span>采样点</span>
+                <strong id="publicTrendCount">3</strong>
+              </div>
+            </div>
+            <div class="public-trend-stage-canvas">
+              <canvas id="publicTrendCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lower-grid static-lower-grid">
+      <div class="panel ai-users-panel public-ai-section">
+        <div class="panel-head compact">
+          <div>
+            <h2>AI 非深度用户</h2>
+            <p id="publicAiMeta">2026-05-08 · 共 25 人</p>
+          </div>
+        </div>
+        <div class="public-ai-grid">
+            <span class="ai-user-pill" title="蔡永乐">
+              <span class="ai-user-avatar">蔡</span>
+              <span class="ai-user-name">蔡永乐</span>
+            </span>
+            
+            <span class="ai-user-pill" title="常姜洲">
+              <span class="ai-user-avatar">常</span>
+              <span class="ai-user-name">常姜洲</span>
+            </span>
+            
+            <span class="ai-user-pill" title="常彦升">
+              <span class="ai-user-avatar">常</span>
+              <span class="ai-user-name">常彦升</span>
+            </span>
+            
+            <span class="ai-user-pill" title="桂斌">
+              <span class="ai-user-avatar">桂</span>
+              <span class="ai-user-name">桂斌</span>
+            </span>
+            
+            <span class="ai-user-pill" title="兰春秋">
+              <span class="ai-user-avatar">兰</span>
+              <span class="ai-user-name">兰春秋</span>
+            </span>
+            
+            <span class="ai-user-pill" title="李进锋">
+              <span class="ai-user-avatar">李</span>
+              <span class="ai-user-name">李进锋</span>
+            </span>
+            
+            <span class="ai-user-pill" title="李景伦">
+              <span class="ai-user-avatar">李</span>
+              <span class="ai-user-name">李景伦</span>
+            </span>
+            
+            <span class="ai-user-pill" title="刘竟博(Seven)">
+              <span class="ai-user-avatar">刘</span>
+              <span class="ai-user-name">刘竟博(Seven)</span>
+            </span>
+            
+            <span class="ai-user-pill" title="刘卫强">
+              <span class="ai-user-avatar">刘</span>
+              <span class="ai-user-name">刘卫强</span>
+            </span>
+            
+            <span class="ai-user-pill" title="陆鑫(Max)">
+              <span class="ai-user-avatar">陆</span>
+              <span class="ai-user-name">陆鑫(Max)</span>
+            </span>
+            
+            <span class="ai-user-pill" title="秦赞">
+              <span class="ai-user-avatar">秦</span>
+              <span class="ai-user-name">秦赞</span>
+            </span>
+            
+            <span class="ai-user-pill" title="邱登辉">
+              <span class="ai-user-avatar">邱</span>
+              <span class="ai-user-name">邱登辉</span>
+            </span>
+            
+            <span class="ai-user-pill" title="覃杨阳">
+              <span class="ai-user-avatar">覃</span>
+              <span class="ai-user-name">覃杨阳</span>
+            </span>
+            
+            <span class="ai-user-pill" title="王佳斌(Bin)">
+              <span class="ai-user-avatar">王</span>
+              <span class="ai-user-name">王佳斌(Bin)</span>
+            </span>
+            
+            <span class="ai-user-pill" title="王诗赋">
+              <span class="ai-user-avatar">王</span>
+              <span class="ai-user-name">王诗赋</span>
+            </span>
+            
+            <span class="ai-user-pill" title="王朝华">
+              <span class="ai-user-avatar">王</span>
+              <span class="ai-user-name">王朝华</span>
+            </span>
+            
+            <span class="ai-user-pill" title="温丽星">
+              <span class="ai-user-avatar">温</span>
+              <span class="ai-user-name">温丽星</span>
+            </span>
+            
+            <span class="ai-user-pill" title="谢传威">
+              <span class="ai-user-avatar">谢</span>
+              <span class="ai-user-name">谢传威</span>
+            </span>
+            
+            <span class="ai-user-pill" title="徐涛">
+              <span class="ai-user-avatar">徐</span>
+              <span class="ai-user-name">徐涛</span>
+            </span>
+            
+            <span class="ai-user-pill" title="杨飞宇">
+              <span class="ai-user-avatar">杨</span>
+              <span class="ai-user-name">杨飞宇</span>
+            </span>
+            
+            <span class="ai-user-pill" title="张鑫">
+              <span class="ai-user-avatar">张</span>
+              <span class="ai-user-name">张鑫</span>
+            </span>
+            
+            <span class="ai-user-pill" title="张欣强">
+              <span class="ai-user-avatar">张</span>
+              <span class="ai-user-name">张欣强</span>
+            </span>
+            
+            <span class="ai-user-pill" title="赵梓博">
+              <span class="ai-user-avatar">赵</span>
+              <span class="ai-user-name">赵梓博</span>
+            </span>
+            
+            <span class="ai-user-pill" title="郑双龙">
+              <span class="ai-user-avatar">郑</span>
+              <span class="ai-user-name">郑双龙</span>
+            </span>
+            
+            <span class="ai-user-pill" title="朱涛">
+              <span class="ai-user-avatar">朱</span>
+              <span class="ai-user-name">朱涛</span>
+            </span>
+            </div>
+      </div>
+    </section>
+
+    <div id="imagePreviewModal" class="image-preview-modal" hidden>
+      <div id="imagePreviewBackdrop" class="image-preview-backdrop"></div>
+      <div class="image-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="imagePreviewTitle">
+        <div class="image-preview-head">
+          <div>
+            <div class="image-preview-kicker">巡检截图</div>
+            <h3 id="imagePreviewTitle">截图预览</h3>
+          </div>
+          <button id="imagePreviewCloseBtn" class="image-preview-close" type="button" aria-label="关闭预览">关闭</button>
+        </div>
+        <div class="image-preview-frame">
+          <img id="imagePreviewImage" alt="" />
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script id="staticChartData" type="application/json">[{"id": "delay_test_rate:delayed_test_requirements", "key": "delayed_test_requirements", "title": "延期提测需求数", "unit": "count", "points": [{"date": "2026-05-08", "value": 0, "unit": "count"}]}, {"id": "delay_online_rate:delayed_online_requirements", "key": "delayed_online_requirements", "title": "延期上线需求数", "unit": "count", "points": [{"date": "2026-05-08", "value": 0, "unit": "count"}]}, {"id": "technical_refactor_working_hours:technical_refactor_working_hours_rate", "key": "technical_refactor_working_hours_rate", "title": "技术改造工时占比", "unit": "%", "points": [{"date": "2026-05-06", "value": 1.47, "unit": "%"}, {"date": "2026-05-07", "value": 1.45, "unit": "%"}, {"date": "2026-05-08", "value": 1.88, "unit": "%"}]}, {"id": "bi_weekly_delivery_rate:biweekly_delivery_rate", "key": "biweekly_delivery_rate", "title": "双周交付率", "unit": "%", "points": [{"date": "2026-05-06", "value": 61.54, "unit": "%"}, {"date": "2026-05-07", "value": 50.0, "unit": "%"}, {"date": "2026-05-08", "value": 48.72, "unit": "%"}]}, {"id": "ai_inspection:ai_non_deep_users", "key": "ai_non_deep_users", "title": "AI 深度用户为否", "unit": "count", "points": [{"date": "2026-05-08", "value": 25, "unit": "count"}]}, {"id": "continuous_delivery:continuous_delivery_team_space_online_requirement_rate", "key": "continuous_delivery_team_space_online_requirement_rate", "title": "持续交付占比", "unit": "%", "points": [{"date": "2026-05-08", "value": 87.5, "unit": "%"}]}]</script>
+  <script>
+    (() => {
+      const fmt = (value, unit = "") => {
+        if (value === null || value === undefined || value === "") return "-";
+        const shown = typeof value === "number" && !Number.isInteger(value)
+          ? String(Number(value.toFixed(2))).replace(/\.0$/, "")
+          : String(value);
+        return unit === "%" ? `${shown}%` : shown;
+      };
+      const payload = JSON.parse(document.getElementById("staticChartData").textContent || "[]");
+      const detailCanvas = document.getElementById("publicTrendCanvas");
+      const trendTitle = document.getElementById("publicTrendTitle");
+      const trendMeta = document.getElementById("publicTrendMeta");
+      const trendLatest = document.getElementById("publicTrendLatest");
+      const trendRange = document.getElementById("publicTrendRange");
+      const trendCount = document.getElementById("publicTrendCount");
+      const trendStage = document.querySelector(".public-trend-stage");
+      const trendCards = Array.from(document.querySelectorAll("[data-chart-option]"));
+      let activeChartId = trendStage?.dataset.activeChart || (payload[0]?.id ?? "");
+      const drawChart = (canvas, option) => {
+        const ctx = canvas.getContext("2d");
+        const points = (option.points || []).filter((point) => point.value !== null && point.value !== undefined);
+        const rect = canvas.getBoundingClientRect();
+        const cssWidth = Math.max(320, Math.floor(rect.width));
+        const cssHeight = Math.max(420, Math.floor(rect.height));
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const bitmapWidth = Math.floor(cssWidth * dpr);
+        const bitmapHeight = Math.floor(cssHeight * dpr);
+        if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
+          canvas.width = bitmapWidth;
+          canvas.height = bitmapHeight;
+        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cssWidth, cssHeight);
+        const pad = { left: 74, right: 26, top: 24, bottom: 46 };
+        const width = cssWidth - pad.left - pad.right;
+        const height = cssHeight - pad.top - pad.bottom;
+        ctx.strokeStyle = "#d9e1e7";
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + height);
+        ctx.lineTo(pad.left + width, pad.top + height);
+        ctx.stroke();
+        ctx.strokeStyle = "#eef3f5";
+        ctx.lineWidth = 1.2;
+        for (let i = 1; i < 4; i += 1) {
+          const y = pad.top + (height / 4) * i;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + width, y);
+          ctx.stroke();
+        }
+        if (!points.length) {
+          ctx.fillStyle = "#62707c";
+          ctx.font = "600 15px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.fillText("暂无可绘制数据", pad.left + 24, pad.top + 80);
+          return;
+        }
+        const values = points.map((point) => Number(point.value));
+        let min = Math.min(...values);
+        let max = Math.max(...values);
+        if (min === max) {
+          min = Math.max(0, min - 1);
+          max = max + 1;
+        }
+        const yFor = (value) => pad.top + height - ((value - min) / (max - min)) * height;
+        const xFor = (index) => pad.left + (points.length === 1 ? width / 2 : (index / (points.length - 1)) * width);
+        ctx.strokeStyle = "#246fa8";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          const x = xFor(index);
+          const y = yFor(Number(point.value));
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        points.forEach((point, index) => {
+          const x = xFor(index);
+          const y = yFor(Number(point.value));
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#246fa8";
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          const valueText = fmt(point.value, option.unit);
+          ctx.font = "800 14px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const textWidth = ctx.measureText(valueText).width;
+          let labelX = x;
+          let labelY = Math.max(pad.top + 14, y - 18);
+          if (index === 0 && points.length > 1) labelX = x + textWidth / 2 + 14;
+          if (index === points.length - 1 && points.length > 1) labelX = x - textWidth / 2 - 14;
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillRect(labelX - textWidth / 2 - 7, labelY - 10, textWidth + 14, 20);
+          ctx.fillStyle = "#1d2a36";
+          ctx.fillText(valueText, labelX, labelY);
+          ctx.fillStyle = "#62707c";
+          ctx.font = "700 13px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillText(String(point.date || "").slice(5), x, pad.top + height + 38);
+        });
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#62707c";
+        ctx.font = "700 13px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.fillText(fmt(max, option.unit), pad.left - 12, pad.top + 4);
+        ctx.fillText(fmt(min, option.unit), pad.left - 12, pad.top + height + 4);
+      };
+      const optionById = (id) => payload.find((option) => option.id === id) || payload[0];
+      const renderActiveChart = (id) => {
+        const option = optionById(id);
+        if (!option || !detailCanvas) return;
+        activeChartId = option.id;
+        const points = (option.points || []).filter((point) => point.value !== null && point.value !== undefined);
+        const latest = points[points.length - 1] || {};
+        const range = points.length ? `${points[0].date || "-"} ~ ${points[points.length - 1].date || "-"}` : "-";
+        if (trendStage) trendStage.dataset.activeChart = activeChartId;
+        if (trendTitle) trendTitle.textContent = option.title || "-";
+        if (trendMeta) trendMeta.textContent = `最新值 ${fmt(latest.value, option.unit)} / ${latest.date || "-"}`;
+        if (trendLatest) trendLatest.textContent = fmt(latest.value, option.unit);
+        if (trendRange) trendRange.textContent = range;
+        if (trendCount) trendCount.textContent = String(points.length);
+        trendCards.forEach((card) => {
+          card.classList.toggle("active", card.dataset.chartOption === activeChartId);
+        });
+        drawChart(detailCanvas, option);
+      };
+      trendCards.forEach((card) => {
+        card.addEventListener("click", () => {
+          renderActiveChart(card.dataset.chartOption || "");
+        });
+      });
+      const rerender = () => {
+        renderActiveChart(activeChartId);
+      };
+
+      const modal = document.getElementById("imagePreviewModal");
+      const modalImage = document.getElementById("imagePreviewImage");
+      const modalTitle = document.getElementById("imagePreviewTitle");
+      const closeBtn = document.getElementById("imagePreviewCloseBtn");
+      const backdrop = document.getElementById("imagePreviewBackdrop");
+      const openImagePreview = (src, title) => {
+        if (!modal || !modalImage || !modalTitle) return;
+        modalImage.src = src;
+        modalImage.alt = `${title}巡检截图`;
+        modalTitle.textContent = title || "截图预览";
+        modal.hidden = false;
+        document.body.style.overflow = "hidden";
+      };
+      const closeImagePreview = () => {
+        if (!modal || !modalImage) return;
+        modal.hidden = true;
+        modalImage.removeAttribute("src");
+        document.body.style.overflow = "";
+      };
+      document.querySelectorAll(".metric-preview img[data-preview-full]").forEach((image) => {
+        image.addEventListener("click", () => {
+          openImagePreview(image.dataset.previewFull || image.src, image.dataset.previewTitle || image.alt || "截图预览");
+        });
+      });
+      closeBtn?.addEventListener("click", closeImagePreview);
+      backdrop?.addEventListener("click", closeImagePreview);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && modal && !modal.hidden) closeImagePreview();
+      });
+
+      rerender();
+      window.addEventListener("resize", rerender);
+    })();
+  </script>
+</body>
+</html>

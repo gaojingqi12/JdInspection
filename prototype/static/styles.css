@@ -135,9 +135,9 @@ h2 {
 
 .command-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr) auto;
+  grid-template-columns: minmax(340px, 0.82fr) minmax(760px, 1.48fr) auto;
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 8px;
   background: rgba(255,255,255,0.10);
@@ -160,6 +160,11 @@ h2 {
 .report-group {
   background: rgba(16, 36, 63, 0.16);
   border: 1px solid rgba(255,255,255,0.12);
+}
+
+.report-group,
+.inspection-group {
+  min-height: 100%;
 }
 
 .command-label {
@@ -209,6 +214,14 @@ button,
   margin-bottom: 0;
 }
 
+.report-links {
+  align-items: center;
+}
+
+.inspection-group .toolbar {
+  gap: 8px;
+}
+
 .toolbar button:not(.primary-command) {
   background: transparent;
   color: #fff;
@@ -229,6 +242,19 @@ button,
   color: rgba(255,255,255,0.9);
   font-size: 13px;
   padding: 7px 10px;
+}
+
+.sync-public-btn {
+  background: rgba(20, 120, 102, 0.18);
+  color: #ecfff8;
+  border-color: rgba(137, 235, 214, 0.34);
+  font-size: 13px;
+  padding: 7px 10px;
+  box-shadow: none;
+}
+
+.sync-public-btn:hover {
+  background: rgba(20, 120, 102, 0.28);
 }
 
 .command-strip button:hover,

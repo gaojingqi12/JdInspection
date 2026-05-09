@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>周度巡检报告</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d7dde6;
+      --paper: #f4f7fb;
+      --panel: #ffffff;
+      --navy: #10243f;
+      --green: #0f8b6f;
+      --blue: #1d6fb8;
+      --amber: #b7791f;
+      --red: #b42318;
+      --shadow: 0 18px 48px rgba(16, 36, 63, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+      min-height: 100vh;
+      background-color: #10243f;
+      background-image:
+        linear-gradient(135deg, rgba(9, 21, 35, 0.92), rgba(12, 72, 67, 0.82)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 21, 35, 0.22)),
+        url("./prototype/static/assets/page-background.png");
+      background-size: cover, cover, cover;
+      background-position: center, center, center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 32px 28px 56px; }
+    .hero {
+      color: #fff;
+      padding: 28px 0 22px;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      align-items: end;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(32px, 5vw, 64px);
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+    .subtitle { max-width: 880px; font-size: 16px; line-height: 1.8; color: rgba(255,255,255,0.82); }
+    .run-card {
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.22);
+      backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 18px;
+      color: rgba(255,255,255,0.92);
+    }
+    .run-card strong { display: block; font-size: 22px; margin-bottom: 4px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0 26px; }
+    .metrics.metrics-5 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .metrics.metrics-5 .metric { grid-column: span 2; }
+    .metrics.metrics-5 .metric:nth-child(n + 4) { grid-column: span 3; }
+    .metric {
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(215,221,230,0.85);
+      min-height: 112px;
+    }
+    .metric-label { color: var(--muted); font-size: 13px; }
+    .metric-value { font-size: 34px; font-weight: 800; margin: 8px 0 6px; color: var(--navy); overflow-wrap: anywhere; }
+    .metric-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    section {
+      background: var(--panel);
+      border: 1px solid rgba(215,221,230,0.95);
+      box-shadow: var(--shadow);
+      border-radius: 8px;
+      margin-top: 18px;
+      overflow: hidden;
+    }
+    .section-head {
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(90deg, #fff, #f7fafc);
+    }
+    h2 { margin: 0; font-size: 20px; letter-spacing: 0; }
+    .section-note { color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 860px; }
+    th {
+      text-align: left;
+      padding: 13px 14px;
+      color: #445065;
+      background: #f3f6fa;
+      font-size: 12px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    td { padding: 15px 14px; border-bottom: 1px solid #e8edf3; vertical-align: top; font-size: 13px; line-height: 1.45; }
+    tr:hover td { background: #f8fbfd; }
+    .index { color: var(--muted); width: 54px; }
+    .demand { font-weight: 700; color: var(--ink); max-width: 420px; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .muted { color: var(--muted); }
+    a { color: var(--blue); text-decoration: none; font-weight: 700; }
+    a:hover { text-decoration: underline; }
+    .badge, .status {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      border-radius: 999px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .badge.blue { background: rgba(29,111,184,0.12); color: var(--blue); }
+    .badge.green { background: rgba(15,139,111,0.12); color: var(--green); }
+    .badge.amber { background: rgba(183,121,31,0.12); color: var(--amber); }
+    .status.ok { background: rgba(15,139,111,0.12); color: var(--green); }
+    .status.calm { background: rgba(183,121,31,0.12); color: var(--amber); }
+    .status.bad { background: rgba(180,35,24,0.10); color: var(--red); }
+    .empty { color: var(--muted); text-align: center; padding: 28px; }
+    .report-nav {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 0 0 26px;
+      padding: 6px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 8px;
+      background: rgba(12,22,34,0.20);
+      box-shadow: 0 16px 38px rgba(0,0,0,0.10);
+      backdrop-filter: blur(16px);
+    }
+    .report-nav a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      color: rgba(255,255,255,0.80);
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 6px;
+      padding: 0 13px;
+      font-size: 14px;
+      font-weight: 760;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: background .18s ease, color .18s ease, border-color .18s ease;
+    }
+    .report-nav a:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.14);
+      text-decoration: none;
+    }
+    .report-nav a[aria-current="page"] {
+      color: #10243f;
+      background: rgba(255,255,255,0.76);
+      border-color: rgba(255,255,255,0.46);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.10);
+    }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+    .split section { margin-top: 0; }
+    footer { color: rgba(255,255,255,0.76); font-size: 12px; margin-top: 22px; text-align: right; }
+    @media (max-width: 980px) {
+      .hero, .split { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .shell { padding: 22px 14px 42px; }
+    }
+    @media (max-width: 560px) {
+      .metrics { grid-template-columns: 1fr; }
+      h1 { font-size: 34px; }
+    }
+
+    .public-shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 32px 28px 56px;
+    }
+    .public-hero {
+      color: #fff;
+      padding: 28px 0 18px;
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 20px;
+      align-items: end;
+    }
+    .public-eyebrow {
+      color: rgba(255,255,255,0.72);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .public-hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+    .public-hero-copy {
+      color: rgba(255,255,255,0.84);
+      font-size: 16px;
+      line-height: 1.8;
+      max-width: 840px;
+    }
+    .public-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+    .public-meta span {
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.14);
+      backdrop-filter: blur(12px);
+      padding: 8px 10px;
+      color: rgba(255,255,255,0.9);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .public-report-hub {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .public-report-link {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 146px;
+      padding: 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #17212b;
+      background: #ffffff;
+      border: 1px solid rgba(215,221,230,0.88);
+      box-shadow: var(--shadow);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .public-report-link:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 42px rgba(16, 36, 63, 0.14);
+      border-color: rgba(29,111,184,0.24);
+      text-decoration: none;
+    }
+    .public-report-link-kicker {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: rgba(29,111,184,0.10);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .public-report-link-title {
+      margin-top: 12px;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 800;
+      color: var(--navy);
+    }
+    .public-report-link-desc {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .static-report-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 18px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.10);
+      backdrop-filter: blur(14px);
+    }
+    .static-report-nav a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: 8px;
+      color: rgba(255,255,255,0.9);
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      font-size: 14px;
+      font-weight: 760;
+      text-decoration: none;
+      transition: transform .18s ease, background .18s ease, color .18s ease;
+    }
+    .static-report-nav a:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.12);
+      text-decoration: none;
+    }
+    .static-report-nav a.active {
+      color: #10243f;
+      background: rgba(255,255,255,0.82);
+      border-color: rgba(255,255,255,0.42);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.10);
+    }
+    .public-board {
+      display: grid;
+      gap: 18px;
+    }
+    .public-overview {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .public-card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(215,221,230,0.85);
+      min-height: 128px;
+    }
+    .public-card-caption {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .public-card-label {
+      color: #445065;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .public-card-value {
+      font-size: 34px;
+      line-height: 1.05;
+      font-weight: 800;
+      margin: 10px 0 8px;
+      color: var(--navy);
+    }
+    .public-card-foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .public-panel {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(215,221,230,0.85);
+    }
+    .public-panel-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .public-panel-head h2 {
+      margin: 0;
+    }
+    .public-panel-head p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .public-trend-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .public-trend-card {
+      border: 1px solid rgba(215,221,230,0.9);
+      border-radius: 8px;
+      padding: 14px;
+      background: linear-gradient(180deg, #ffffff, #f8fbfd);
+      min-height: 216px;
+    }
+    .public-trend-title {
+      font-size: 15px;
+      font-weight: 760;
+      color: var(--ink);
+    }
+    .public-trend-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .public-trend-card canvas {
+      width: 100%;
+      height: 140px;
+      display: block;
+      margin-top: 10px;
+    }
+    .public-ai-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .public-ai-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(215,221,230,0.9);
+      background: #f8fbfd;
+      padding: 10px 12px;
+    }
+    .public-ai-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(36,111,168,0.12);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+    .public-ai-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .public-reports {
+      margin-top: 22px;
+    }
+    .public-report-block {
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .public-report-block .hero {
+      margin: 0 0 22px;
+      padding: 28px 30px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+      gap: 22px;
+      align-items: end;
+      color: var(--ink);
+      border: 1px solid rgba(201, 214, 225, 0.92);
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(29, 111, 184, 0.055), transparent 34%),
+        linear-gradient(180deg, #ffffff, #fbfcfe);
+      box-shadow:
+        0 20px 44px rgba(16, 36, 63, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.94);
+    }
+    .public-report-block .hero h1 {
+      color: var(--navy);
+      font-size: clamp(34px, 4.2vw, 56px);
+      line-height: 1;
+      margin: 0 0 12px;
+    }
+    .public-report-block .subtitle {
+      max-width: none;
+      color: #617083;
+      font-size: 16px;
+      line-height: 1.7;
+      font-weight: 650;
+    }
+    .public-report-block .run-card {
+      justify-self: end;
+      min-width: min(100%, 360px);
+      color: var(--ink);
+      border: 1px solid rgba(217, 225, 231, 0.95);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,251,253,0.88));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.92);
+      backdrop-filter: none;
+    }
+    .public-report-block .run-card strong {
+      color: var(--navy);
+      font-size: 22px;
+      line-height: 1.15;
+    }
+    .public-report-block .run-card div {
+      color: #617083;
+      font-weight: 650;
+    }
+    .public-report-block .run-card .meta {
+      color: #718093 !important;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .public-report-block footer {
+      display: none;
+    }
+    .public-report-block .metrics {
+      gap: 18px;
+      margin: 22px 0 30px;
+      padding: 6px;
+    }
+    .public-report-block .metric {
+      min-height: 140px;
+      padding: 22px 24px;
+      border-radius: 14px;
+      border-color: rgba(201, 214, 225, 0.92);
+      background:
+        radial-gradient(circle at 100% 0%, rgba(29, 111, 184, 0.045), transparent 34%),
+        linear-gradient(180deg, #ffffff, #fbfcfe);
+      box-shadow:
+        0 18px 38px rgba(16, 36, 63, 0.08),
+        inset 0 1px 0 rgba(255,255,255,0.92);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .public-report-block .metric:hover {
+      transform: translateY(-2px);
+      border-color: rgba(29, 111, 184, 0.20);
+      box-shadow:
+        0 24px 48px rgba(16, 36, 63, 0.11),
+        inset 0 1px 0 rgba(255,255,255,0.96);
+    }
+    .public-report-block .metric-label {
+      color: #687684;
+      font-size: 14px;
+      font-weight: 760;
+    }
+    .public-report-block .metric-value {
+      margin: 12px 0 10px;
+      font-size: 38px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .public-report-block .metric-note {
+      color: #6b7987;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .public-report-block .badge.submit-test { background: rgba(29,111,184,0.12); color: var(--blue); }
+    .public-report-block .badge.online { background: rgba(15,139,111,0.12); color: var(--green); }
+    .public-report-block .date {
+      display: inline-flex;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-weight: 800;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .public-report-block .date.old { color: var(--red); background: rgba(180,35,24,0.08); border-color: rgba(180,35,24,0.15); }
+    .public-report-block .date.new { color: var(--green); background: rgba(15,139,111,0.10); border-color: rgba(15,139,111,0.16); }
+    .public-report-block .date.current { color: var(--navy); background: #eef4fa; border-color: #d7e4f1; }
+    @media (max-width: 1100px) {
+      .public-overview,
+      .public-report-hub,
+      .public-trend-grid,
+      .public-ai-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .public-report-block .hero {
+        grid-template-columns: 1fr;
+      }
+      .public-report-block .run-card {
+        justify-self: stretch;
+      }
+    }
+    @media (max-width: 860px) {
+      .public-hero {
+        grid-template-columns: 1fr;
+      }
+      .public-meta {
+        justify-content: flex-start;
+      }
+    }
+    @media (max-width: 640px) {
+      .public-shell {
+        padding: 22px 14px 42px;
+      }
+      .public-overview,
+      .public-report-hub,
+      .public-trend-grid,
+      .public-ai-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+</style>
+</head>
+<body>
+  <main class="public-shell">
+    <nav class="static-report-nav" aria-label="报告导航"><a class="" href="./index.html">返回看板</a><a class="" href="./daily-report.html">日常报告</a><a class="active" href="./weekly-report.html">周度报告</a><a class="" href="./repair-report.html">修复报告</a><a class="" href="./thursday-report.html">日期调整报告</a></nav>
+    <section class="public-reports">
+      <article class="public-report-block"><header class="hero">
+      <div>
+        <h1>周度巡检报告</h1>
+        <div class="subtitle">收银台&amp;内单交易域 · 周度 INE 指标巡检</div>
+      </div>
+      <div class="run-card">
+        <strong>2026-05-08 20:50:12</strong>
+        <div>报告生成时间</div>
+      </div>
+    </header>
+    <div class="metrics metrics-4">
+      <div class="metric">
+        <div class="metric-label">延期提测率</div>
+        <div class="metric-value">0.0%</div>
+        <div class="metric-note">WTD · 支付生态研发部</div>
+      </div>
+    
+      <div class="metric">
+        <div class="metric-label">延期上线率</div>
+        <div class="metric-value">0.0%</div>
+        <div class="metric-note">WTD · 支付生态研发部</div>
+      </div>
+    
+      <div class="metric">
+        <div class="metric-label">双周交付率</div>
+        <div class="metric-value">72.04%</div>
+        <div class="metric-note">WTD · 支付生态研发部</div>
+      </div>
+    
+      <div class="metric">
+        <div class="metric-label">技术改造工时占比</div>
+        <div class="metric-value">1.79%</div>
+        <div class="metric-note">WTD · 支付生态研发部</div>
+      </div>
+    </div>
+    
+      <section>
+        <div class="section-head">
+          <h2>核心指标概览</h2>
+          
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>指标</th><th>主视角</th><th>WTD</th><th>WTD 环比</th><th>MTD</th><th>MTD 同比</th><th>YTD</th></tr></thead>
+            <tbody><tr><td><span class="index">1</span></td><td><div class="demand">延期提测率</div><div class="meta">共创指标汇总-延期提测率-支付方案研发部</div></td><td>支付生态研发部</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>-1.98%</td><td>2.19%</td></tr><tr><td><span class="index">2</span></td><td><div class="demand">延期上线率</div><div class="meta">共创指标汇总-延期上线率-支付方案研发部</div></td><td>支付生态研发部</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>-0.8%</td><td>1.59%</td></tr><tr><td><span class="index">3</span></td><td><div class="demand">双周交付率</div><div class="meta">共创指标汇总-双周交付率-支付方案研发部</div></td><td>支付生态研发部</td><td>72.04%</td><td>1.29%</td><td>64.71%</td><td>19.82%</td><td>70.52%</td></tr><tr><td><span class="index">4</span></td><td><div class="demand">技术改造工时占比</div><div class="meta">共创指标汇总-技术改造工时占比-支付方案研发部</div></td><td>支付生态研发部</td><td>1.79%</td><td>1.79%</td><td>0.0%</td><td>-16.41%</td><td>3.94%</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    
+      <section>
+        <div class="section-head">
+          <h2>延期提测率</h2>
+          <div class="section-note">共创指标汇总-延期提测率-支付方案研发部</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>团队/虚拟组</th><th>WTD</th><th>WTD 环比</th><th>MTD</th><th>MTD 同比</th><th>YTD</th></tr></thead>
+            <tbody><tr><td><span class="index">1</span></td><td><div class="demand">C3汇总</div></td><td>0.0%</td><td>-1.49%</td><td>0.0%</td><td>-1.98%</td><td>1.83%</td></tr><tr><td><span class="index">2</span></td><td><div class="demand">支付拓展研发部</div></td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>-2.63%</td><td>2.65%</td></tr><tr><td><span class="index">3</span></td><td><div class="demand">支付方案质量部</div></td><td>0.0%</td><td>-1.69%</td><td>0.0%</td><td>-2.86%</td><td>2.04%</td></tr><tr><td><span class="index">4</span></td><td><div class="demand">支付生态研发部</div></td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>-1.98%</td><td>2.19%</td></tr><tr><td><span class="index">5</span></td><td><div class="demand">直挂C3</div></td><td>0.0%</td><td>-5.56%</td><td>0.0%</td><td>0.0%</td><td>1.34%</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    
+      <section>
+        <div class="section-head">
+          <h2>延期上线率</h2>
+          <div class="section-note">共创指标汇总-延期上线率-支付方案研发部</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>团队/虚拟组</th><th>WTD</th><th>WTD 环比</th><th>MTD</th><th>MTD 同比</th><th>YTD</th></tr></thead>
+            <tbody><tr><td><span class="index">1</span></td><td><div class="demand">C3汇总</div></td><td>2.7%</td><td>0.2%</td><td>2.7%</td><td>0.23%</td><td>2.13%</td></tr><tr><td><span class="index">2</span></td><td><div class="demand">支付拓展研发部</div></td><td>0.0%</td><td>-10.53%</td><td>0.0%</td><td>-1.92%</td><td>1.25%</td></tr><tr><td><span class="index">3</span></td><td><div class="demand">支付方案质量部</div></td><td>3.13%</td><td>-0.1%</td><td>3.13%</td><td>1.21%</td><td>1.72%</td></tr><tr><td><span class="index">4</span></td><td><div class="demand">支付生态研发部</div></td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>-0.8%</td><td>1.59%</td></tr><tr><td><span class="index">5</span></td><td><div class="demand">直挂C3</div></td><td>16.67%</td><td>16.67%</td><td>16.67%</td><td>12.67%</td><td>2.98%</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    
+      <section>
+        <div class="section-head">
+          <h2>双周交付率</h2>
+          <div class="section-note">共创指标汇总-双周交付率-支付方案研发部</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>团队/虚拟组</th><th>WTD</th><th>WTD 环比</th><th>MTD</th><th>MTD 同比</th><th>YTD</th></tr></thead>
+            <tbody><tr><td><span class="index">1</span></td><td><div class="demand">C3汇总</div></td><td>64.93%</td><td>-0.22%</td><td>47.37%</td><td>2.67%</td><td>61.06%</td></tr><tr><td><span class="index">2</span></td><td><div class="demand">支付拓展研发部</div></td><td>60.0%</td><td>2.62%</td><td>28.57%</td><td>-17.58%</td><td>60.0%</td></tr><tr><td><span class="index">3</span></td><td><div class="demand">支付方案质量部</div></td><td>63.9%</td><td>0.4%</td><td>48.48%</td><td>4.3%</td><td>59.82%</td></tr><tr><td><span class="index">4</span></td><td><div class="demand">支付生态研发部</div></td><td>72.04%</td><td>1.29%</td><td>64.71%</td><td>19.82%</td><td>70.52%</td></tr><tr><td><span class="index">5</span></td><td><div class="demand">直挂C3</div></td><td>64.52%</td><td>-2.79%</td><td>16.67%</td><td>-29.22%</td><td>56.2%</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    
+      <section>
+        <div class="section-head">
+          <h2>技术改造工时占比</h2>
+          <div class="section-note">共创指标汇总-技术改造工时占比-支付方案研发部</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>团队/虚拟组</th><th>WTD</th><th>WTD 环比</th><th>MTD</th><th>MTD 同比</th><th>YTD</th></tr></thead>
+            <tbody><tr><td><span class="index">1</span></td><td><div class="demand">C3汇总</div></td><td>2.22%</td><td>-0.55%</td><td>1.88%</td><td>-10.28%</td><td>6.96%</td></tr><tr><td><span class="index">2</span></td><td><div class="demand">支付拓展研发部</div></td><td>1.49%</td><td>1.49%</td><td>0.0%</td><td>-15.93%</td><td>7.65%</td></tr><tr><td><span class="index">3</span></td><td><div class="demand">支付方案质量部</div></td><td>3.74%</td><td>3.74%</td><td>1.69%</td><td>-7.09%</td><td>7.95%</td></tr><tr><td><span class="index">4</span></td><td><div class="demand">支付生态研发部</div></td><td>1.79%</td><td>1.79%</td><td>0.0%</td><td>-16.41%</td><td>3.94%</td></tr><tr><td><span class="index">5</span></td><td><div class="demand">直挂C3</div></td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td><td>0.0%</td></tr></tbody>
+          </table>
+        </div>
+      </section></article>
+    </section>
+  </main>
+</body>
+</html>

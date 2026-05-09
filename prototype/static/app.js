@@ -165,6 +165,43 @@ async function loadSummary() {
   render();
 }
 
+async function syncPublicSite() {
+  const button = $("syncStaticBtn");
+  const ok = await openConfirmModal({
+    title: "同步展示页",
+    description: "确认后会把最新看板数据和四份报告同步生成到根目录 index.html，供静态部署使用。",
+    confirmText: "确认同步",
+  });
+  if (!ok) return;
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "同步中...";
+  try {
+    const res = await fetch("/api/public-site/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      throw new Error("public site sync failed");
+    }
+    const payload = await res.json();
+    button.textContent = "已同步";
+    appendMessage("assistant", `静态展示页已同步：${payload.file || "根目录 index.html"}。`);
+    window.setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 1800);
+  } catch (error) {
+    button.textContent = "同步失败";
+    appendMessage("assistant", "同步展示页失败，请稍后重试。");
+    window.setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 2200);
+  }
+}
+
 async function loadActions() {
   const res = await fetch("/api/actions");
   if (!res.ok) throw new Error("actions request failed");
@@ -839,6 +876,9 @@ $("refreshBtn").addEventListener("click", async () => {
   });
   if (!ok) return;
   await loadSummary();
+});
+$("syncStaticBtn").addEventListener("click", async () => {
+  await syncPublicSite();
 });
 $("modelSelect").addEventListener("change", async () => {
   await saveSettings();
