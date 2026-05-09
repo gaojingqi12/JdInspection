@@ -41,23 +41,64 @@ def set_job(job_id: str, **updates) -> None:
             JOBS[job_id]["updated_at"] = now_text()
 
 
-def run_command(job_id: str, command: list[str], cwd: Path, timeout_seconds: int = 60 * 60) -> int:
+def run_command(job_id: str, command: list[str], cwd: Path, timeout_seconds: int = 60 * 60) -> dict:
     display = " ".join(command)
     append_job_log(job_id, f"开始执行：{display}")
-    completed = subprocess.run(
-        command,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
-    )
+    started_at = now_text()
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout_tail = tail_text(exc.stdout or "")
+        stderr_tail = tail_text(exc.stderr or "")
+        if stdout_tail:
+            append_job_log(job_id, "stdout:\n" + stdout_tail)
+        if stderr_tail:
+            append_job_log(job_id, "stderr:\n" + stderr_tail)
+        append_job_log(job_id, f"执行超时，timeout={timeout_seconds}")
+        return {
+            "status": "timeout",
+            "returncode": None,
+            "stdout_tail": stdout_tail,
+            "stderr_tail": stderr_tail,
+            "started_at": started_at,
+            "finished_at": now_text(),
+            "error": f"执行超过 {timeout_seconds} 秒",
+        }
+    except Exception as exc:
+        append_job_log(job_id, f"执行异常：{exc}")
+        return {
+            "status": "failed",
+            "returncode": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+            "started_at": started_at,
+            "finished_at": now_text(),
+            "error": str(exc),
+        }
+
+    stdout_tail = tail_text(completed.stdout or "", 3000)
+    stderr_tail = tail_text(completed.stderr or "", 3000)
     if completed.stdout:
-        append_job_log(job_id, "stdout:\n" + tail_text(completed.stdout, 3000))
+        append_job_log(job_id, "stdout:\n" + stdout_tail)
     if completed.stderr:
-        append_job_log(job_id, "stderr:\n" + tail_text(completed.stderr, 3000))
+        append_job_log(job_id, "stderr:\n" + stderr_tail)
     append_job_log(job_id, f"执行结束，returncode={completed.returncode}")
-    return completed.returncode
+    return {
+        "status": "success" if completed.returncode == 0 else "failed",
+        "returncode": completed.returncode,
+        "stdout_tail": stdout_tail,
+        "stderr_tail": stderr_tail,
+        "started_at": started_at,
+        "finished_at": now_text(),
+        "error": "" if completed.returncode == 0 else "脚本返回非 0 状态",
+    }
 
 
 def tail_text(value: str, max_chars: int = 3000) -> str:
@@ -284,6 +325,18 @@ def action_requires_confirmation(action: str, message: str = "") -> str:
     return ""
 
 
+def update_step_result(job_id: str, index: int, **updates) -> None:
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            return
+        results = job.setdefault("step_results", [])
+        if not (0 <= index - 1 < len(results)):
+            return
+        results[index - 1].update(updates)
+        job["updated_at"] = now_text()
+
+
 def run_job(job_id: str) -> None:
     with JOB_LOCK:
         job = JOBS[job_id]
@@ -294,9 +347,21 @@ def run_job(job_id: str) -> None:
         for index, item in enumerate(steps, 1):
             set_job(job_id, current_step=index, total_steps=len(steps))
             append_job_log(job_id, f"步骤 {index}/{len(steps)}：{item['label']}")
-            code = run_command(job_id, item["command"], item["cwd"])
-            if code != 0:
-                set_job(job_id, status="failed", finished_at=now_text(), returncode=code)
+            update_step_result(job_id, index, status="running", started_at=now_text())
+            result = run_command(job_id, item["command"], item["cwd"])
+            update_step_result(job_id, index, **result)
+            if result.get("status") != "success":
+                for skipped_index in range(index + 1, len(steps) + 1):
+                    update_step_result(job_id, skipped_index, status="skipped")
+                set_job(
+                    job_id,
+                    status=result.get("status") or "failed",
+                    finished_at=now_text(),
+                    returncode=result.get("returncode"),
+                    failed_step=index,
+                    failed_step_label=item["label"],
+                    error=result.get("error") or "",
+                )
                 append_job_log(job_id, "任务失败，已停止后续步骤。")
                 return
         set_job(job_id, status="success", finished_at=now_text(), returncode=0)
@@ -312,6 +377,16 @@ def run_job(job_id: str) -> None:
 def start_job(action: str) -> dict:
     job_id = uuid.uuid4().hex[:12]
     steps = action_steps(action)
+    step_results = [
+        {
+            "index": index,
+            "label": item["label"],
+            "command": " ".join(item["command"]),
+            "cwd": str(item["cwd"]),
+            "status": "queued",
+        }
+        for index, item in enumerate(steps, 1)
+    ]
     with JOB_LOCK:
         JOBS[job_id] = {
             "id": job_id,
@@ -322,6 +397,7 @@ def start_job(action: str) -> dict:
             "updated_at": now_text(),
             "current_step": 0,
             "total_steps": len(steps),
+            "step_results": step_results,
             "logs": [],
         }
     thread = threading.Thread(target=run_job, args=(job_id,), daemon=True)

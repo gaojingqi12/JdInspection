@@ -15,16 +15,26 @@ from agent_memory import load_memory, save_memory, summarize_for_prompt, update_
 from actions import (
     JOBS,
     JOB_LOCK,
-    action_registry,
-    action_requires_confirmation,
     action_title,
-    detect_action,
     is_inspection_related,
     public_actions,
-    start_job,
     wait_for_job,
 )
+from agent_tools import (
+    action_from_tool_call,
+    detect_tool_call,
+    execute_tool_call,
+    openai_tool_schemas,
+    public_tools,
+    resolve_routed_tool_call,
+    tool_call_from_action,
+    tool_catalog_for_prompt,
+    tool_requires_confirmation,
+    tool_title,
+    validate_tool_call,
+)
 from daily_templates import DailyInspectionRenderer
+from failure_recovery import render_failure_recovery
 from inspection_agent import InspectionAgent, InspectionAgentDeps
 
 
@@ -117,7 +127,7 @@ REPORT_STYLE = """
       background-image:
         linear-gradient(135deg, rgba(9, 21, 35, 0.92), rgba(12, 72, 67, 0.82)),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 21, 35, 0.22)),
-        url("/static/assets/page-background.png");
+        url("/static/assets/jd-inspection-page-background.png");
       background-size: cover, cover, cover;
       background-position: center, center, center;
       background-repeat: no-repeat;
@@ -279,10 +289,11 @@ STATIC_ROOT_DAILY_REPORT_PATH = ROOT_DIR / "daily-report.html"
 STATIC_ROOT_WEEKLY_REPORT_PATH = ROOT_DIR / "weekly-report.html"
 STATIC_ROOT_REPAIR_REPORT_PATH = ROOT_DIR / "repair-report.html"
 STATIC_ROOT_THURSDAY_REPORT_PATH = ROOT_DIR / "thursday-report.html"
-STATIC_ROOT_ASSET_PATH = "./prototype/static/assets/page-background.png"
+STATIC_ROOT_ASSET_PATH = "./prototype/static/assets/jd-inspection-page-background.png"
 STATIC_FRONTEND_STYLESHEET_PATH = "./prototype/static/styles.css"
-STATIC_ROOT_REPORT_STYLE = REPORT_STYLE.replace('/static/assets/page-background.png', STATIC_ROOT_ASSET_PATH)
-STATIC_TREND_ILLUSTRATION_PATH = "./prototype/static/assets/static-trend-illustration.png"
+STATIC_ROOT_REPORT_STYLE = REPORT_STYLE.replace('/static/assets/jd-inspection-page-background.png', STATIC_ROOT_ASSET_PATH)
+STATIC_TREND_ILLUSTRATION_PATH = "./prototype/static/assets/jd-static-trend-banner.png"
+STATIC_HERO_BRAND_PATH = "./prototype/static/assets/jd-static-showcase-hero-brand.png"
 STATIC_HOME_OVERRIDE_STYLE = f"""
     body {{
       background-image:
@@ -399,6 +410,46 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       font-size: 15px;
       line-height: 1.7;
       margin-top: 6px;
+    }}
+    .public-static-hero-art {{
+      position: absolute;
+      right: 28px;
+      top: 176px;
+      z-index: 0;
+      width: min(250px, 14vw);
+      aspect-ratio: 1 / 1;
+      margin: 0;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 18px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+      box-shadow:
+        0 24px 56px rgba(9, 21, 35, 0.24),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+      opacity: 0.82;
+      pointer-events: none;
+    }}
+    .public-static-hero-art::after {{
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(9, 21, 35, 0.02), rgba(9, 21, 35, 0.12));
+    }}
+    .public-static-hero-art img {{
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      filter: saturate(1.04) contrast(0.98);
+    }}
+    .public-command-bar,
+    .metric-grid,
+    .workspace,
+    .static-lower-grid {{
+      position: relative;
+      z-index: 1;
     }}
     .chart-panel .panel-head {{
       padding-bottom: 6px;
@@ -616,6 +667,9 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       min-height: 420px;
     }}
     @media (max-width: 900px) {{
+      .public-static-hero-art {{
+        display: none;
+      }}
       .public-command-bar .report-links {{
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }}
@@ -1774,9 +1828,10 @@ def recent_model_history(history_messages: list[dict] | None, limit: int = 8) ->
 
 INTENT_ROUTER_PROMPT = (
     "你是巡检助手的意图路由器。只能输出 JSON，不要输出解释。"
-    "根据用户消息、历史对话、巡检摘要和记忆，从候选 action 中选择一个。"
-    "如果用户只是询问数据、状态、总结、风险或继续上下文，action 输出 none。"
-    "如果用户表达要执行巡检、修复、刷新报告、生成周报文案或日期调整，输出对应 action。"
+    "根据用户消息、历史对话、巡检摘要和记忆，从候选 tools 中选择一个工具调用。"
+    "如果用户只是询问数据、状态、总结、风险或继续上下文，tool_call 输出 null，action 输出 none。"
+    "如果用户表达要执行巡检、修复、刷新报告、生成周报文案或日期调整，输出对应 tool_call。"
+    "写操作即使缺少确认短语也要输出工具调用，确认门由系统后置处理。"
 )
 
 
@@ -1808,29 +1863,24 @@ def route_intent_with_model(
     client_config: dict,
     history_messages: list[dict] | None = None,
 ) -> dict:
-    fallback = {"action": detect_action(message), "source": "rules"}
+    fallback_tool_call = detect_tool_call(message)
+    fallback = {
+        "action": action_from_tool_call(fallback_tool_call),
+        "tool_call": fallback_tool_call,
+        "source": "rules",
+    }
     config = merged_ai_config(client_config)
     api_key = str(config.get("api_key") or "").strip()
     if not api_key:
         return fallback
 
-    actions = [
-        {
-            "id": action_id,
-            "title": item.get("title"),
-            "description": item.get("description"),
-            "risk": item.get("risk"),
-            "confirm_phrase": item.get("confirm_phrase", ""),
-        }
-        for action_id, item in action_registry().items()
-    ]
     recent_history = recent_model_history(history_messages, limit=6)
     context = {
         "inspection_date": summary.get("inspection_date"),
         "display_domain": summary.get("display_domain"),
         "daily_inspection_status": daily_inspection_assessment(summary).get("status"),
         "memory": memory,
-        "actions": actions,
+        "tools": tool_catalog_for_prompt(),
     }
     payload = {
         "model": str(config.get("model") or DEFAULT_MODEL).strip(),
@@ -1844,7 +1894,8 @@ def route_intent_with_model(
                     f"用户消息：{message}\n"
                     f"上下文 JSON：{json.dumps(context, ensure_ascii=False)}\n"
                     "请输出 JSON："
-                    '{"action":"none 或候选 action id","confidence":0到1,"reason":"一句话原因"}'
+                    '{"tool_call":null 或 {"name":"候选工具名","arguments":{"reason":"一句话原因"}},'
+                    '"action":"none 或对应 action id","confidence":0到1,"reason":"一句话原因"}'
                 ),
             },
         ],
@@ -1869,11 +1920,11 @@ def route_intent_with_model(
         return fallback
     content = str((choices[0].get("message") or {}).get("content") or "")
     routed = extract_json_object(content)
-    action = str(routed.get("action") or "none").strip()
-    if action not in action_registry():
-        action = "none"
+    tool_call = resolve_routed_tool_call({**routed, "source": "llm-router"})
+    action = action_from_tool_call(tool_call)
     return {
         "action": action,
+        "tool_call": tool_call,
         "confidence": routed.get("confidence"),
         "reason": str(routed.get("reason") or ""),
         "source": "llm-router",
@@ -2464,7 +2515,7 @@ def build_static_site_index_html() -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>收银台&内单交易域静态展示页</title>
+  <title>收银台&内单交易域巡检看板</title>
   <link rel="stylesheet" href="{STATIC_FRONTEND_STYLESHEET_PATH}" />
   <style>{STATIC_HOME_OVERRIDE_STYLE}</style>
 </head>
@@ -2473,13 +2524,17 @@ def build_static_site_index_html() -> str:
     <header class="topbar hero-panel">
       <div>
         <div class="eyebrow">收银台&内单交易域</div>
-        <h1>收银台&内单交易域静态展示页</h1>
+        <h1>收银台&内单交易域巡检看板</h1>
       </div>
       <div class="header-meta">
         <span>{html_text(summary.get('display_domain') or summary.get('department_c3') or '-')}</span>
         <span>{html_text((summary.get('time_range') or {}).get('start_date') or '-')} ~ {html_text((summary.get('time_range') or {}).get('end_date') or '-')}</span>
       </div>
     </header>
+
+    <figure class="public-static-hero-art" aria-hidden="true">
+      <img src="{STATIC_HERO_BRAND_PATH}" alt="" loading="lazy" />
+    </figure>
 
     <section class="command-bar public-command-bar">
       <div class="command-group report-group">
@@ -2917,14 +2972,17 @@ def inspection_agent() -> InspectionAgent:
                 finish_chat_turn=finish_chat_turn,
                 read_summary=lambda: read_json(SUMMARY_PATH, {}),
                 read_memory=read_agent_memory,
-                detect_action=detect_action,
+                detect_tool_call=detect_tool_call,
                 route_intent=route_intent_with_model,
+                resolve_routed_tool_call=resolve_routed_tool_call,
+                action_from_tool_call=action_from_tool_call,
                 is_inspection_related=is_inspection_related,
                 out_of_scope_answer=out_of_scope_answer,
-                action_requires_confirmation=action_requires_confirmation,
-                action_title=action_title,
-                start_job=start_job,
+                tool_requires_confirmation=tool_requires_confirmation,
+                tool_title=tool_title,
+                execute_tool_call=execute_tool_call,
                 wait_for_job=wait_for_job,
+                render_failure_recovery=render_failure_recovery,
                 call_chat_model=call_chat_model,
                 call_chat_model_stream=call_chat_model_stream,
                 answer_chat=answer_chat,
@@ -2964,7 +3022,9 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             summary = compact_summary(read_json(SUMMARY_PATH, {}))
             return self.write_json(summary)
         if path == "/api/actions":
-            return self.write_json({"actions": public_actions()})
+            return self.write_json({"actions": public_actions(), "tools": public_tools()})
+        if path == "/api/tools":
+            return self.write_json({"tools": public_tools(), "openai_tools": openai_tool_schemas()})
         if path == "/api/ai-config":
             with AI_CONFIG_LOCK:
                 return self.write_json(public_ai_config(load_ai_config()))
@@ -3023,7 +3083,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in ("/api/chat", "/api/chat/stream", "/api/actions/run", "/api/jobs/clear", "/api/chat/sessions", "/api/chat/sessions/clear-all", "/api/ai-config", "/api/ai-config/test", "/api/public-site/sync") and not (
+        if parsed.path not in ("/api/chat", "/api/chat/stream", "/api/actions/run", "/api/tools/call", "/api/jobs/clear", "/api/chat/sessions", "/api/chat/sessions/clear-all", "/api/ai-config", "/api/ai-config/test", "/api/public-site/sync") and not (
             parsed.path.startswith("/api/chat/sessions/") and parsed.path.endswith("/clear")
         ):
             return self.send_error(404)
@@ -3086,23 +3146,36 @@ class PrototypeHandler(BaseHTTPRequestHandler):
                 save_chat_store(store)
                 return self.write_json({"session": session, "sessions": sorted_chat_sessions(store)})
 
-        if parsed.path == "/api/actions/run":
+        if parsed.path in ("/api/actions/run", "/api/tools/call"):
+            tool_call = validate_tool_call(payload.get("tool_call") if isinstance(payload.get("tool_call"), dict) else None)
             action = str(payload.get("action") or "")
+            if not tool_call and action:
+                tool_call = tool_call_from_action(action, source="api")
+            action = action_from_tool_call(tool_call)
             message = str(payload.get("message") or "")
-            if action not in action_registry():
-                return self.write_json({"error": "unknown_action", "message": "未知动作"})
-            required = action_requires_confirmation(action, message)
+            if action == "none":
+                return self.write_json({"error": "unknown_tool", "message": "未知工具或动作"})
+            required = tool_requires_confirmation(tool_call, message)
             if required:
                 return self.write_json(
                     {
                         "error": "confirmation_required",
                         "action": action,
+                        "tool_call": tool_call,
                         "required_phrase": required,
                         "answer": f"这个动作会修改线上数据。请在输入框里包含“{required}”后再执行。",
                     }
                 )
-            job = start_job(action)
-            return self.write_json({"action": action, "job": job, "answer": f"已开始执行：{action_title(action)}。"})
+            tool_result = execute_tool_call(tool_call)
+            return self.write_json(
+                {
+                    "action": action,
+                    "tool_call": tool_call,
+                    "tool_result": tool_result,
+                    "job": tool_result.get("job"),
+                    "answer": tool_result.get("message") or f"已开始执行：{tool_title(tool_call)}。",
+                }
+            )
 
         if parsed.path == "/api/chat/stream":
             return self.handle_chat_stream(payload)

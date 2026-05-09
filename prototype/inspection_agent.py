@@ -17,6 +17,8 @@ class AgentState(TypedDict, total=False):
     summary: dict[str, Any]
     memory: dict[str, Any]
     intent: dict[str, Any]
+    tool_call: dict[str, Any] | None
+    tool_result: dict[str, Any] | None
     action: str
     ai_config: dict[str, Any]
     answer_parts: list[str]
@@ -38,6 +40,8 @@ class AgentResult(TypedDict):
     session_id: str
     sessions: list[dict[str, Any]]
     confirmation_required: NotRequired[str]
+    tool_call: NotRequired[dict[str, Any] | None]
+    tool_result: NotRequired[dict[str, Any] | None]
 
 
 @dataclass(frozen=True)
@@ -46,14 +50,17 @@ class InspectionAgentDeps:
     finish_chat_turn: Callable[[str, str], list[dict[str, Any]]]
     read_summary: Callable[[], dict[str, Any]]
     read_memory: Callable[..., dict[str, Any]]
-    detect_action: Callable[[str], str]
+    detect_tool_call: Callable[[str], dict[str, Any] | None]
     route_intent: Callable[[str, dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]], dict[str, Any]]
+    resolve_routed_tool_call: Callable[[dict[str, Any]], dict[str, Any] | None]
+    action_from_tool_call: Callable[[dict[str, Any] | None], str]
     is_inspection_related: Callable[[str, str], bool]
     out_of_scope_answer: Callable[[], str]
-    action_requires_confirmation: Callable[[str, str], str]
-    action_title: Callable[[str], str]
-    start_job: Callable[[str], dict[str, Any]]
+    tool_requires_confirmation: Callable[[dict[str, Any] | None, str], str]
+    tool_title: Callable[[dict[str, Any] | str | None], str]
+    execute_tool_call: Callable[[dict[str, Any] | None], dict[str, Any]]
     wait_for_job: Callable[[str, int], dict[str, Any]]
+    render_failure_recovery: Callable[[dict[str, Any] | None, dict[str, Any]], str]
     call_chat_model: Callable[[str, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]], str]
     call_chat_model_stream: Callable[[str, str, dict[str, Any], dict[str, Any], list[dict[str, Any]]], Iterable[str]]
     answer_chat: Callable[[str, dict[str, Any], str, str], str]
@@ -81,9 +88,10 @@ class InspectionAgent:
             yield from self._emit_answer(state, self.deps.out_of_scope_answer(), "inspection-scope-guard")
         elif state.get("stop_reason") == "confirmation_required":
             required = str(state.get("confirmation_required") or "")
-            action = str(state.get("action") or "none")
-            text = f"我识别到你想执行“{self.deps.action_title(action)}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。"
+            text = f"我识别到你想执行“{self.deps.tool_title(state.get('tool_call'))}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。"
             yield from self._emit_answer(state, text, "confirmation-required")
+        elif state.get("stop_reason") == "tool_call_failed":
+            yield from self._emit_answer(state, str(state.get("error") or "工具调用失败。"), "tool-call-failed")
         else:
             yield from self._stream_model_answer(state)
 
@@ -99,6 +107,8 @@ class InspectionAgent:
             "ai_config": payload.get("ai") if isinstance(payload.get("ai"), dict) else {},
             "answer_parts": [],
             "job": None,
+            "tool_call": None,
+            "tool_result": None,
             "mode": "mimo-chat-stream",
             "streamed": False,
         }
@@ -154,8 +164,9 @@ class InspectionAgent:
         active_session_id, previous_messages = self.deps.begin_chat_turn(message, session_id)
         summary = self.deps.read_summary()
         memory = self.deps.read_memory(active_session_id)
-        action = self.deps.detect_action(message)
-        intent = {"action": action, "source": "rules"}
+        tool_call = self.deps.detect_tool_call(message)
+        action = self.deps.action_from_tool_call(tool_call)
+        intent = {"action": action, "tool_call": tool_call, "source": "rules"}
         if action == "none":
             intent = self.deps.route_intent(
                 message,
@@ -164,13 +175,15 @@ class InspectionAgent:
                 state.get("ai_config") or {},
                 previous_messages,
             )
-            action = str(intent.get("action") or "none")
+            tool_call = self.deps.resolve_routed_tool_call(intent)
+            action = self.deps.action_from_tool_call(tool_call)
         return {
             "active_session_id": active_session_id,
             "previous_messages": previous_messages,
             "summary": summary,
             "memory": memory,
             "intent": intent,
+            "tool_call": tool_call,
             "action": action,
         }
 
@@ -188,7 +201,7 @@ class InspectionAgent:
         action = str(state.get("action") or "none")
         if action == "none":
             return {}
-        required = self.deps.action_requires_confirmation(action, str(state.get("message") or ""))
+        required = self.deps.tool_requires_confirmation(state.get("tool_call"), str(state.get("message") or ""))
         if not required:
             return {}
         return {
@@ -201,7 +214,15 @@ class InspectionAgent:
         action = str(state.get("action") or "none")
         if action == "none":
             return {}
-        return {"job": self.deps.start_job(action)}
+        tool_result = self.deps.execute_tool_call(state.get("tool_call"))
+        if not tool_result.get("ok"):
+            return {
+                "tool_result": tool_result,
+                "stop_reason": "tool_call_failed",
+                "mode": "tool-call-failed",
+                "error": str(tool_result.get("message") or tool_result.get("error") or "工具调用失败。"),
+            }
+        return {"job": tool_result.get("job"), "tool_result": tool_result}
 
     def _route_after_scope(self, state: AgentState) -> str:
         return "stop" if state.get("stop_reason") else "continue"
@@ -215,14 +236,23 @@ class InspectionAgent:
             return state
         if state.get("stop_reason") == "confirmation_required":
             required = str(state.get("confirmation_required") or "")
-            action = str(state.get("action") or "none")
-            state["answer"] = f"我识别到你想执行“{self.deps.action_title(action)}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。"
+            state["answer"] = f"我识别到你想执行“{self.deps.tool_title(state.get('tool_call'))}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。"
+            return state
+        if state.get("stop_reason") == "tool_call_failed":
+            state["answer"] = str(state.get("error") or "工具调用失败。")
             return state
 
         message = str(state.get("message") or "")
         action = str(state.get("action") or "none")
         self._wait_for_action_job(state)
         summary = state.get("summary") or {}
+        if action != "none":
+            failure_recovery = self.deps.render_failure_recovery(state.get("job"), summary)
+            if failure_recovery:
+                state["answer"] = failure_recovery
+                state["mode"] = "failure-recovery"
+                return state
+
         model_answer = ""
         try:
             ai_config = dict(state.get("ai_config") or {})
@@ -247,9 +277,15 @@ class InspectionAgent:
     def _stream_model_answer(self, state: AgentState) -> Iterator[AgentEvent]:
         action = str(state.get("action") or "none")
         if action != "none":
-            prefix = f"已开始执行：{self.deps.action_title(action)}。任务面板会持续刷新步骤、状态和最近日志。\n"
+            prefix = f"已开始执行：{self.deps.tool_title(state.get('tool_call') or action)}。任务面板会持续刷新步骤、状态和最近日志。\n"
             yield from self._emit_text(state, prefix)
         self._wait_for_action_job(state)
+        if action != "none":
+            failure_recovery = self.deps.render_failure_recovery(state.get("job"), state.get("summary") or {})
+            if failure_recovery:
+                state["mode"] = "failure-recovery"
+                yield from self._emit_text(state, failure_recovery)
+                return
 
         try:
             ai_config = dict(state.get("ai_config") or {})
@@ -286,7 +322,7 @@ class InspectionAgent:
 
     def _wait_for_action_job(self, state: AgentState) -> None:
         action = str(state.get("action") or "none")
-        if action not in {"daily_inspection", "daily_inspection_with_repair"}:
+        if action == "none":
             return
         job = state.get("job") or {}
         job_id = str(job.get("id") or "")
@@ -316,6 +352,8 @@ class InspectionAgent:
             "mode": str(state.get("mode") or "mimo-chat-stream"),
             "session_id": str(state.get("active_session_id") or ""),
             "sessions": sessions,
+            "tool_call": state.get("tool_call"),
+            "tool_result": state.get("tool_result"),
         }
         if state.get("confirmation_required"):
             result["confirmation_required"] = str(state["confirmation_required"])

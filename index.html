@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>收银台&内单交易域静态展示页</title>
+  <title>收银台&内单交易域巡检看板</title>
   <link rel="stylesheet" href="./prototype/static/styles.css" />
   <style>
     body {
       background-image:
         linear-gradient(135deg, rgba(9, 21, 35, 0.92), rgba(12, 72, 67, 0.82)),
         linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(9, 21, 35, 0.22)),
-        url("./prototype/static/assets/page-background.png") !important;
+        url("./prototype/static/assets/jd-inspection-page-background.png") !important;
     }
     .public-command-bar {
       grid-template-columns: minmax(0, 1fr);
@@ -121,6 +121,46 @@
       font-size: 15px;
       line-height: 1.7;
       margin-top: 6px;
+    }
+    .public-static-hero-art {
+      position: absolute;
+      right: 28px;
+      top: 176px;
+      z-index: 0;
+      width: min(250px, 14vw);
+      aspect-ratio: 1 / 1;
+      margin: 0;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 18px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+      box-shadow:
+        0 24px 56px rgba(9, 21, 35, 0.24),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+      opacity: 0.82;
+      pointer-events: none;
+    }
+    .public-static-hero-art::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(9, 21, 35, 0.02), rgba(9, 21, 35, 0.12));
+    }
+    .public-static-hero-art img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      filter: saturate(1.04) contrast(0.98);
+    }
+    .public-command-bar,
+    .metric-grid,
+    .workspace,
+    .static-lower-grid {
+      position: relative;
+      z-index: 1;
     }
     .chart-panel .panel-head {
       padding-bottom: 6px;
@@ -338,6 +378,9 @@
       min-height: 420px;
     }
     @media (max-width: 900px) {
+      .public-static-hero-art {
+        display: none;
+      }
       .public-command-bar .report-links {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -398,13 +441,17 @@
     <header class="topbar hero-panel">
       <div>
         <div class="eyebrow">收银台&内单交易域</div>
-        <h1>收银台&内单交易域静态展示页</h1>
+        <h1>收银台&内单交易域巡检看板</h1>
       </div>
       <div class="header-meta">
         <span>收银台&amp;内单交易域</span>
         <span>2026-05-04 ~ 2026-05-08</span>
       </div>
     </header>
+
+    <figure class="public-static-hero-art" aria-hidden="true">
+      <img src="./prototype/static/assets/jd-static-showcase-hero-brand.png" alt="" loading="lazy" />
+    </figure>
 
     <section class="command-bar public-command-bar">
       <div class="command-group report-group">
@@ -708,7 +755,7 @@
             </button>
             
             <figure class="public-trend-visual" aria-hidden="true">
-              <img src="./prototype/static/assets/static-trend-illustration.png" alt="" loading="lazy" />
+              <img src="./prototype/static/assets/jd-static-trend-banner.png" alt="" loading="lazy" />
             </figure>
           </div>
           <div class="public-trend-stage" data-active-chart="technical_refactor_working_hours:technical_refactor_working_hours_rate">
