@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
 import re
-import subprocess
 import threading
-import time
 import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
+
+from actions import (
+    JOBS,
+    JOB_LOCK,
+    action_registry,
+    action_requires_confirmation,
+    action_title,
+    detect_action,
+    is_inspection_related,
+    public_actions,
+    start_job,
+    wait_for_job,
+)
+from daily_templates import DailyInspectionRenderer
+from inspection_agent import InspectionAgent, InspectionAgentDeps
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -21,16 +33,13 @@ SUMMARY_PATH = ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-o
 REPORT_HTML_PATH = ROOT_DIR / "daily-inspection-skill" / "index.html"
 THURSDAY_REPORT_HTML_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "index.html"
 WEEKLY_METRICS_PATH = ROOT_DIR / "friday-inspection-skill" / "scripts" / "out" / "ine_metrics.json"
-PYTHON_BIN = Path("/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python")
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
 DEFAULT_API_KEY = ""
 CHAT_HISTORY_PATH = Path(__file__).resolve().parent / "data" / "chat-history.json"
 AI_CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ai-config.json"
-JOB_LOCK = threading.Lock()
 CHAT_LOCK = threading.Lock()
 AI_CONFIG_LOCK = threading.Lock()
-JOBS: dict[str, dict] = {}
 
 MODEL_ALIASES = {
     "mimo-v2.5-pro": "mimo-v2.5-pro",
@@ -1584,10 +1593,6 @@ def render_weekly_report_html() -> str:
         weekly_generated_at(),
     )
 
-def python_bin() -> str:
-    return str(PYTHON_BIN if PYTHON_BIN.exists() else Path(os.sys.executable))
-
-
 def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1690,345 +1695,6 @@ def finish_chat_turn(session_id: str, answer: str) -> list[dict]:
         return sorted_chat_sessions(store)
 
 
-def append_job_log(job_id: str, text: str) -> None:
-    with JOB_LOCK:
-        job = JOBS.get(job_id)
-        if not job:
-            return
-        job.setdefault("logs", []).append(f"[{now_text()}] {text}")
-        job["logs"] = job["logs"][-200:]
-        job["updated_at"] = now_text()
-
-
-def set_job(job_id: str, **updates) -> None:
-    with JOB_LOCK:
-        if job_id in JOBS:
-            JOBS[job_id].update(updates)
-            JOBS[job_id]["updated_at"] = now_text()
-
-
-def run_command(job_id: str, command: list[str], cwd: Path, timeout_seconds: int = 60 * 60) -> int:
-    display = " ".join(command)
-    append_job_log(job_id, f"开始执行：{display}")
-    completed = subprocess.run(
-        command,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds,
-        check=False,
-    )
-    if completed.stdout:
-        append_job_log(job_id, "stdout:\n" + tail_text(completed.stdout, 3000))
-    if completed.stderr:
-        append_job_log(job_id, "stderr:\n" + tail_text(completed.stderr, 3000))
-    append_job_log(job_id, f"执行结束，returncode={completed.returncode}")
-    return completed.returncode
-
-
-def tail_text(value: str, max_chars: int = 3000) -> str:
-    if len(value) <= max_chars:
-        return value.strip()
-    return value[-max_chars:].strip()
-
-
-def step(command: list[str], cwd: Path, label: str) -> dict:
-    return {"command": command, "cwd": cwd, "label": label}
-
-
-def daily_dir() -> Path:
-    return ROOT_DIR / "daily-inspection-skill"
-
-
-def friday_dir() -> Path:
-    return ROOT_DIR / "friday-inspection-skill"
-
-
-def thursday_dir() -> Path:
-    return ROOT_DIR / "thursday-to-friday-adjustment"
-
-
-def daily_inspection_steps(skip_repair: bool = True) -> list[dict]:
-    daily_dir = ROOT_DIR / "daily-inspection-skill"
-    py = python_bin()
-    aggregate = [py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py"]
-    if skip_repair:
-        aggregate.append("--skip-repair")
-    return [
-        step([py, "scripts/run_skill.py"], daily_dir / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检"),
-        step([py, "scripts/run_skill.py"], daily_dir / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检"),
-        step([py, "scripts/run_skill.py"], daily_dir / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检"),
-        step([py, "scripts/run_skill.py"], daily_dir / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检"),
-        step([py, "scripts/run_skill.py"], daily_dir / "AI-inspection", "AI 深度用户巡检"),
-        step([py, "scripts/run_skill.py"], daily_dir / "ContinuousDelivery-inspection", "持续交付巡检"),
-        step(aggregate, daily_dir, "生成日常巡检报告"),
-    ]
-
-
-def friday_inspection_steps() -> list[dict]:
-    py = python_bin()
-    friday_dir = ROOT_DIR / "friday-inspection-skill"
-    return [step([py, "scripts/run_skill.py", "--headless"], friday_dir, "周度 INE 指标抓取")]
-
-
-def action_registry() -> dict[str, dict]:
-    py = python_bin()
-    d = daily_dir()
-    f = friday_dir()
-    t = thursday_dir()
-    return {
-        "daily_inspection": {
-            "title": "日常巡检",
-            "group": "主流程",
-            "description": "依次执行 OKR、AI、持续交付巡检，并刷新总报告。默认不触发自动修复。",
-            "risk": "safe",
-            "aliases": ["日常巡检", "每日巡检", "帮我日常巡检", "帮我巡检", "daily"],
-            "steps": daily_inspection_steps(skip_repair=True),
-        },
-        "daily_inspection_with_repair": {
-            "title": "日常巡检并自动修复",
-            "group": "主流程",
-            "description": "执行完整日常巡检，并允许汇总阶段按延期指标触发修复脚本。",
-            "risk": "write",
-            "confirm_phrase": "确认执行修复",
-            "aliases": ["日常巡检并修复", "完整日常巡检", "带修复日常巡检"],
-            "steps": daily_inspection_steps(skip_repair=False),
-        },
-        "friday_inspection": {
-            "title": "周度巡检",
-            "group": "主流程",
-            "description": "抓取周度 INE 指标数据，生成 friday-inspection-skill/scripts/out/ine_metrics.json。",
-            "risk": "safe",
-            "aliases": ["周度巡检", "周五巡检", "周五", "friday"],
-            "steps": friday_inspection_steps(),
-        },
-        "okr_all": {
-            "title": "OKR 四项巡检",
-            "group": "单项巡检",
-            "description": "只运行延期提测、延期上线、技术改造工时、双周交付率四项。",
-            "risk": "safe",
-            "aliases": ["okr巡检", "OKR巡检", "okr四项"],
-            "steps": daily_inspection_steps(skip_repair=True)[:4],
-        },
-        "delay_test_rate": {
-            "title": "延期提测率",
-            "group": "单项巡检",
-            "description": "单独抓取延期提测率指标。",
-            "risk": "safe",
-            "aliases": ["延期提测率", "提测率巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检")],
-        },
-        "delay_online_rate": {
-            "title": "延期上线率",
-            "group": "单项巡检",
-            "description": "单独抓取延期上线率指标。",
-            "risk": "safe",
-            "aliases": ["延期上线率", "上线率巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检")],
-        },
-        "technical_refactor": {
-            "title": "技术改造工时",
-            "group": "单项巡检",
-            "description": "单独抓取技术改造工时占比。",
-            "risk": "safe",
-            "aliases": ["技术改造", "技术改造工时", "技改工时"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检")],
-        },
-        "biweekly_delivery": {
-            "title": "双周交付率",
-            "group": "单项巡检",
-            "description": "单独抓取双周交付率。",
-            "risk": "safe",
-            "aliases": ["双周交付", "双周交付率"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检")],
-        },
-        "ai_inspection": {
-            "title": "AI 深度用户",
-            "group": "单项巡检",
-            "description": "下载并筛选 AI 非深度用户名单。",
-            "risk": "safe",
-            "aliases": ["AI巡检", "ai巡检", "非深度用户"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "AI-inspection", "AI 深度用户巡检")],
-        },
-        "continuous_delivery": {
-            "title": "持续交付",
-            "group": "单项巡检",
-            "description": "抓取持续交付三张指标卡。",
-            "risk": "safe",
-            "aliases": ["持续交付", "持续交付巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "ContinuousDelivery-inspection", "持续交付巡检")],
-        },
-        "aggregate_report": {
-            "title": "刷新总报告",
-            "group": "报告",
-            "description": "只读取已有 JSON 重新生成日常巡检 HTML，不触发修复。",
-            "risk": "safe",
-            "aliases": ["刷新报告", "生成总报告", "重新生成报告"],
-            "steps": [step([py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py", "--skip-repair"], d, "生成日常巡检报告")],
-        },
-        "friday_report_text": {
-            "title": "周报备文案",
-            "group": "报告",
-            "description": "读取周度 JSON，生成支付生态研发部报备文案。",
-            "risk": "safe",
-            "aliases": ["周报备", "周报备文案", "生成周报文案", "周五报备", "周五报备文案", "生成周五文案"],
-            "steps": [
-                step(
-                    [
-                        py,
-                        "joyclaw-payment-ecosystem-report-skill/scripts/render_joyclaw_report.py",
-                        "--json",
-                        "scripts/out/ine_metrics.json",
-                        "--out",
-                        "scripts/out/joyclaw_report.txt",
-                    ],
-                    f,
-                    "生成周报备文案",
-                )
-            ],
-        },
-        "thursday_report": {
-            "title": "计划日期调整报告",
-            "group": "日期调整",
-            "description": "只读取已有 JSON，刷新计划日期调整 HTML 报告。",
-            "risk": "safe",
-            "aliases": ["计划日期调整报告", "刷新日期调整报告", "刷新周四报告", "周四改周五报告", "刷新改周五报告"],
-            "steps": [step([py, "generate_modification_report.py"], t, "刷新计划日期调整报告")],
-        },
-        "thursday_adjustment": {
-            "title": "执行计划日期调整",
-            "group": "日期调整",
-            "description": "打开星云看板，将命中的计划提测/上线日期调整到目标日期。",
-            "risk": "write",
-            "confirm_phrase": "确认执行日期调整",
-            "aliases": ["执行计划日期调整", "计划日期调整", "周四改周五", "执行周四改周五", "改周五"],
-            "steps": [step([py, "open_jd_cashier.py"], t, "执行计划日期调整")],
-        },
-        "repair_delayed_test": {
-            "title": "修复延期提测",
-            "group": "修复",
-            "description": "执行延期提测修复脚本，会打开详情页并修改计划提测日期。",
-            "risk": "write",
-            "confirm_phrase": "确认修复延期提测",
-            "aliases": ["修复延期提测", "延期提测修复"],
-            "steps": [step([py, "main.py"], d / "reschedule-delayed-test ", "修复延期提测")],
-        },
-        "repair_delayed_online": {
-            "title": "修复延期上线",
-            "group": "修复",
-            "description": "执行延期上线修复脚本，会打开详情页并修改计划上线日期。",
-            "risk": "write",
-            "confirm_phrase": "确认修复延期上线",
-            "aliases": ["修复延期上线", "延期上线修复"],
-            "steps": [step([py, "main.py"], d / "repair-delayed-launch", "修复延期上线")],
-        },
-    }
-
-
-def public_actions() -> list[dict]:
-    items = []
-    for action_id, item in action_registry().items():
-        public = {key: value for key, value in item.items() if key not in {"steps", "aliases"}}
-        public["id"] = action_id
-        public["step_count"] = len(item.get("steps", []))
-        items.append(public)
-    return items
-
-
-def action_steps(action: str) -> list[dict]:
-    return action_registry()[action]["steps"]
-
-
-def action_title(action: str) -> str:
-    return action_registry().get(action, {}).get("title", action)
-
-
-def action_requires_confirmation(action: str, message: str = "") -> str:
-    item = action_registry().get(action, {})
-    phrase = item.get("confirm_phrase", "")
-    if item.get("risk") == "write" and phrase and phrase not in message:
-        return phrase
-    return ""
-
-
-def run_job(job_id: str) -> None:
-    with JOB_LOCK:
-        job = JOBS[job_id]
-        action = job["action"]
-    set_job(job_id, status="running", started_at=now_text())
-    steps = action_steps(action)
-    try:
-        for index, item in enumerate(steps, 1):
-            set_job(job_id, current_step=index, total_steps=len(steps))
-            append_job_log(job_id, f"步骤 {index}/{len(steps)}：{item['label']}")
-            code = run_command(job_id, item["command"], item["cwd"])
-            if code != 0:
-                set_job(job_id, status="failed", finished_at=now_text(), returncode=code)
-                append_job_log(job_id, "任务失败，已停止后续步骤。")
-                return
-        set_job(job_id, status="success", finished_at=now_text(), returncode=0)
-        append_job_log(job_id, "任务完成。")
-    except subprocess.TimeoutExpired as exc:
-        append_job_log(job_id, f"任务超时：{exc}")
-        set_job(job_id, status="timeout", finished_at=now_text(), returncode=None)
-    except Exception as exc:
-        append_job_log(job_id, f"任务异常：{exc}")
-        set_job(job_id, status="failed", finished_at=now_text(), error=str(exc))
-
-
-def start_job(action: str) -> dict:
-    job_id = uuid.uuid4().hex[:12]
-    steps = action_steps(action)
-    with JOB_LOCK:
-        JOBS[job_id] = {
-            "id": job_id,
-            "action": action,
-            "title": action_title(action),
-            "status": "queued",
-            "created_at": now_text(),
-            "updated_at": now_text(),
-            "current_step": 0,
-            "total_steps": len(steps),
-            "logs": [],
-        }
-    thread = threading.Thread(target=run_job, args=(job_id,), daemon=True)
-    thread.start()
-    return JOBS[job_id]
-
-
-def detect_action(message: str) -> str:
-    text = (message or "").strip().lower()
-    registry = action_registry()
-    direct = re.search(r"(?:执行|运行|启动)?\s*action:([a-z0-9_]+)", text)
-    if direct and direct.group(1) in registry:
-        return direct.group(1)
-    aliases = [
-        (alias.lower(), action_id)
-        for action_id, item in registry.items()
-        for alias in item.get("aliases", [])
-    ]
-    for alias, action_id in sorted(aliases, key=lambda pair: len(pair[0]), reverse=True):
-        if alias in text:
-            return action_id
-    return "none"
-
-
-def is_inspection_related(message: str, action: str = "none") -> bool:
-    text = (message or "").strip().lower()
-    if not text:
-        return True
-    if action != "none":
-        return True
-    keywords = (
-        "巡检", "指标", "数据", "报告", "报表", "风险", "异常", "问题", "缺失", "失败",
-        "延期", "提测", "上线", "修复", "交付", "双周", "持续交付", "技术改造",
-        "ai", "非深度", "名单", "报备", "周报", "总结", "草稿", "任务", "脚本",
-        "收银台", "内单", "交易域", "okr", "joyclaw", "mimo", "模型", "连接",
-        "今天", "本周", "概览", "多少", "状态",
-    )
-    return any(keyword in text for keyword in keywords)
-
-
 def out_of_scope_answer() -> str:
     return "我只负责巡检相关的对话，可以帮你看指标、风险、报告、任务状态，或执行日常巡检、周度巡检和修复脚本。"
 
@@ -2047,7 +1713,51 @@ def merged_ai_config(client_config: dict | None = None) -> dict:
     return config
 
 
+_DAILY_INSPECTION_RENDERER: DailyInspectionRenderer | None = None
+
+
+def daily_inspection_renderer() -> DailyInspectionRenderer:
+    global _DAILY_INSPECTION_RENDERER
+    if _DAILY_INSPECTION_RENDERER is None:
+        _DAILY_INSPECTION_RENDERER = DailyInspectionRenderer(
+            template_dir=Path(__file__).resolve().parent / "templates",
+            parse_numberish=parse_numberish,
+            build_overview=build_overview,
+            build_repair_metrics=build_repair_metrics,
+            repair_metric_config=REPAIR_METRIC_CONFIG,
+        )
+    return _DAILY_INSPECTION_RENDERER
+
+
+def daily_inspection_assessment(summary: dict) -> dict:
+    return daily_inspection_renderer().daily_inspection_assessment(summary)
+
+
+def chat_model_context(summary: dict) -> dict:
+    return {
+        "inspection_date": summary.get("inspection_date"),
+        "status": summary.get("status"),
+        "department_c3": summary.get("department_c3"),
+        "display_domain": summary.get("display_domain"),
+        "overview": build_overview(summary)[:10],
+        "daily_inspection_assessment": daily_inspection_assessment(summary),
+    }
+
+
+SYSTEM_PROMPT = (
+    "你是一个中文巡检助手，只能处理和收银台&内单交易域巡检有关的问题。"
+    "你的范围包括：巡检指标解释、风险/异常分析、报告摘要、任务状态、脚本执行反馈、延期提测/延期上线修复、AI非深度用户、持续交付和技术改造等。"
+    "如果用户问闲聊、通用知识、代码教学、生活建议、新闻、翻译、写作等非巡检内容，必须拒绝，并用一句话引导用户回到巡检问题。"
+    "不要编造未提供的数据。"
+    "当用户询问日常巡检、今日巡检结果、异常/风险概览或报备草稿时，必须严格按照 daily_inspection_assessment.selected_template 输出。"
+    "不在阈值内的指标已经用警示标识标注，不得修改标识、数值、顺序和模板结构。"
+)
+
+
 def call_chat_model(message: str, action: str, summary: dict, client_config: dict, history_messages: list[dict] | None = None) -> str:
+    if action in {"daily_inspection", "daily_inspection_with_repair"}:
+        return daily_inspection_assessment(summary)["selected_template"]
+
     config = merged_ai_config(client_config)
     api_key = str(config.get("api_key") or "").strip()
     if not api_key:
@@ -2059,13 +1769,7 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
     action_text = {
         "none": "用户没有明确要求启动脚本，只是在询问巡检数据或对话。",
     }.get(action, f"用户想启动动作：{action_title(action)}。")
-    context = {
-        "inspection_date": summary.get("inspection_date"),
-        "status": summary.get("status"),
-        "department_c3": summary.get("department_c3"),
-        "display_domain": summary.get("display_domain"),
-        "overview": build_overview(summary)[:10],
-    }
+    context = chat_model_context(summary)
     recent_history = [
         {
             "role": item.get("role") if item.get("role") in ("user", "assistant") else "user",
@@ -2077,12 +1781,7 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
     model_messages = [
         {
             "role": "system",
-            "content": (
-                "你是一个中文巡检助手，只能处理和收银台&内单交易域巡检有关的问题。"
-                "你的范围包括：巡检指标解释、风险/异常分析、报告摘要、任务状态、脚本执行反馈、延期提测/延期上线修复、AI非深度用户、持续交付和技术改造等。"
-                "如果用户问闲聊、通用知识、代码教学、生活建议、新闻、翻译、写作等非巡检内容，必须拒绝，并用一句话引导用户回到巡检问题。"
-                "不要编造未提供的数据。"
-            ),
+            "content": SYSTEM_PROMPT,
         },
         *recent_history,
         {
@@ -2091,7 +1790,9 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
                 f"用户消息：{message}\n"
                 f"系统判定：{action_text}\n"
                 f"当前巡检摘要 JSON：{json.dumps(context, ensure_ascii=False)}\n"
-                "请先判断是否属于巡检范围；属于则用 1-3 句话回复，不属于则按系统规则拒绝。"
+                "请先判断是否属于巡检范围；不属于则按系统规则拒绝。"
+                "如果是日常巡检、今日巡检结果、异常/风险概览或报备草稿，请严格按照 daily_inspection_assessment.selected_template 输出；"
+                "其他巡检问题可以简洁回复。"
             ),
         },
     ]
@@ -2120,6 +1821,10 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
 
 
 def call_chat_model_stream(message: str, action: str, summary: dict, client_config: dict, history_messages: list[dict] | None = None):
+    if action in {"daily_inspection", "daily_inspection_with_repair"}:
+        yield daily_inspection_assessment(summary)["selected_template"]
+        return
+
     config = merged_ai_config(client_config)
     api_key = str(config.get("api_key") or "").strip()
     if not api_key:
@@ -2131,13 +1836,7 @@ def call_chat_model_stream(message: str, action: str, summary: dict, client_conf
     action_text = {
         "none": "用户没有明确要求启动脚本，只是在询问巡检数据或对话。",
     }.get(action, f"用户想启动动作：{action_title(action)}。")
-    context = {
-        "inspection_date": summary.get("inspection_date"),
-        "status": summary.get("status"),
-        "department_c3": summary.get("department_c3"),
-        "display_domain": summary.get("display_domain"),
-        "overview": build_overview(summary)[:10],
-    }
+    context = chat_model_context(summary)
     recent_history = [
         {
             "role": item.get("role") if item.get("role") in ("user", "assistant") else "user",
@@ -2153,12 +1852,7 @@ def call_chat_model_stream(message: str, action: str, summary: dict, client_conf
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "你是一个中文巡检助手，只能处理和收银台&内单交易域巡检有关的问题。"
-                    "你的范围包括：巡检指标解释、风险/异常分析、报告摘要、任务状态、脚本执行反馈、延期提测/延期上线修复、AI非深度用户、持续交付和技术改造等。"
-                    "如果用户问闲聊、通用知识、代码教学、生活建议、新闻、翻译、写作等非巡检内容，必须拒绝，并用一句话引导用户回到巡检问题。"
-                    "不要编造未提供的数据。"
-                ),
+                "content": SYSTEM_PROMPT,
             },
             *recent_history,
             {
@@ -2167,7 +1861,9 @@ def call_chat_model_stream(message: str, action: str, summary: dict, client_conf
                     f"用户消息：{message}\n"
                     f"系统判定：{action_text}\n"
                     f"当前巡检摘要 JSON：{json.dumps(context, ensure_ascii=False)}\n"
-                    "请先判断是否属于巡检范围；属于则用 1-3 句话回复，不属于则按系统规则拒绝。"
+                    "请先判断是否属于巡检范围；不属于则按系统规则拒绝。"
+                    "如果是日常巡检、今日巡检结果、异常/风险概览或报备草稿，请严格按照 daily_inspection_assessment.selected_template 输出；"
+                    "其他巡检问题可以简洁回复。"
                 ),
             },
         ],
@@ -3053,6 +2749,32 @@ def answer_chat(message: str, summary: dict, action: str = "none", model_answer:
     )
 
 
+_INSPECTION_AGENT: InspectionAgent | None = None
+
+
+def inspection_agent() -> InspectionAgent:
+    global _INSPECTION_AGENT
+    if _INSPECTION_AGENT is None:
+        _INSPECTION_AGENT = InspectionAgent(
+            InspectionAgentDeps(
+                begin_chat_turn=begin_chat_turn,
+                finish_chat_turn=finish_chat_turn,
+                read_summary=lambda: read_json(SUMMARY_PATH, {}),
+                detect_action=detect_action,
+                is_inspection_related=is_inspection_related,
+                out_of_scope_answer=out_of_scope_answer,
+                action_requires_confirmation=action_requires_confirmation,
+                action_title=action_title,
+                start_job=start_job,
+                wait_for_job=wait_for_job,
+                call_chat_model=call_chat_model,
+                call_chat_model_stream=call_chat_model_stream,
+                answer_chat=answer_chat,
+            )
+        )
+    return _INSPECTION_AGENT
+
+
 class PrototypeHandler(BaseHTTPRequestHandler):
     server_version = "JoyClawPrototype/0.1"
 
@@ -3217,122 +2939,17 @@ class PrototypeHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/chat/stream":
             return self.handle_chat_stream(payload)
 
-        message = str(payload.get("message") or "")
-        session_id = str(payload.get("session_id") or "")
-        active_session_id, previous_messages = begin_chat_turn(message, session_id)
-
-        summary = read_json(SUMMARY_PATH, {})
-        action = detect_action(message)
-        if not is_inspection_related(message, action):
-            answer = out_of_scope_answer()
-            sessions = finish_chat_turn(active_session_id, answer)
-            return self.write_json(
-                {
-                    "answer": answer,
-                    "action": action,
-                    "job": None,
-                    "mode": "inspection-scope-guard",
-                    "session_id": active_session_id,
-                    "sessions": sessions,
-                }
-            )
-        required = action_requires_confirmation(action, message) if action != "none" else ""
-        if required:
-            answer = f"我识别到你想执行“{action_title(action)}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。"
-            sessions = finish_chat_turn(active_session_id, answer)
-            return self.write_json(
-                {
-                    "answer": answer,
-                    "action": action,
-                    "job": None,
-                    "confirmation_required": required,
-                    "mode": "confirmation-required",
-                    "session_id": active_session_id,
-                    "sessions": sessions,
-                }
-            )
-        job = start_job(action) if action != "none" else None
-        model_answer = ""
-        try:
-            model_answer = call_chat_model(message, action, summary, payload.get("ai") or {}, previous_messages)
-        except Exception as exc:
-            model_answer = f"模型调用暂时失败，已使用本地规则继续处理。错误：{exc}"
-        answer = answer_chat(message, summary, action=action, model_answer=model_answer)
-        sessions = finish_chat_turn(active_session_id, answer)
-        return self.write_json(
-            {
-                "answer": answer,
-                "action": action,
-                "job": job,
-                "mode": "mimo-chat-with-local-actions" if model_answer else "local-action-fallback",
-                "session_id": active_session_id,
-                "sessions": sessions,
-            }
-        )
+        return self.write_json(inspection_agent().invoke(payload))
 
     def handle_chat_stream(self, payload: dict):
-        message = str(payload.get("message") or "")
-        session_id = str(payload.get("session_id") or "")
-        active_session_id, previous_messages = begin_chat_turn(message, session_id)
-        summary = read_json(SUMMARY_PATH, {})
-        action = detect_action(message)
-        job = None
-        answer_parts: list[str] = []
-        mode = "mimo-chat-stream"
-
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Connection", "close")
         self.end_headers()
 
-        def emit_text(text: str):
-            if not text:
-                return
-            answer_parts.append(text)
-            self.write_sse("delta", {"text": text})
-
-        self.write_sse("meta", {"session_id": active_session_id, "action": action})
-
-        if not is_inspection_related(message, action):
-            mode = "inspection-scope-guard"
-            emit_text(out_of_scope_answer())
-        else:
-            required = action_requires_confirmation(action, message) if action != "none" else ""
-            if required:
-                mode = "confirmation-required"
-                emit_text(f"我识别到你想执行“{action_title(action)}”，但这个动作会修改线上数据。请明确输入“{required}”后再执行。")
-            else:
-                job = start_job(action) if action != "none" else None
-                if action != "none":
-                    emit_text(f"已开始执行：{action_title(action)}。任务面板会持续刷新步骤、状态和最近日志。\n")
-                streamed = False
-                try:
-                    for chunk in call_chat_model_stream(message, action, summary, payload.get("ai") or {}, previous_messages):
-                        streamed = True
-                        emit_text(chunk)
-                except Exception as exc:
-                    fallback = f"模型调用暂时失败，已使用本地规则继续处理。错误：{exc}"
-                    emit_text(fallback if action != "none" else answer_chat(message, summary, action=action, model_answer=fallback))
-                    mode = "model-error-fallback"
-                if not streamed and not answer_parts:
-                    fallback = answer_chat(message, summary, action=action, model_answer="")
-                    emit_text(fallback)
-                    mode = "local-action-fallback"
-
-        answer = "".join(answer_parts)
-        sessions = finish_chat_turn(active_session_id, answer)
-        self.write_sse(
-            "done",
-            {
-                "answer": answer,
-                "action": action,
-                "job": job,
-                "mode": mode,
-                "session_id": active_session_id,
-                "sessions": sessions,
-            },
-        )
+        for event, event_payload in inspection_agent().stream(payload):
+            self.write_sse(event, event_payload)
         return None
 
     def write_sse(self, event: str, payload: dict):
