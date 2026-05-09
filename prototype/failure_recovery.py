@@ -71,6 +71,8 @@ def failed_repair_inspections(summary: dict[str, Any]) -> list[dict[str, Any]]:
         script_status = str(script.get("status") or "")
         trigger = repair.get("trigger") or {}
         triggered = bool(trigger.get("triggered"))
+        if status == "无当天JSON" and script_status == "skipped":
+            continue
         if status in REPAIR_FAILURE_STATUSES and (triggered or status != "无当天JSON"):
             failures.append(repair)
         elif script_status in TERMINAL_FAILURES or script_status == "missing_script":

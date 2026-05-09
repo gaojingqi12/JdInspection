@@ -42,8 +42,9 @@
         <div class="toolbar">
           <button id="refreshBtn" class="primary-command" type="button" data-confirm-title="刷新数据">刷新数据</button>
           <button id="syncStaticBtn" class="sync-public-btn" type="button">同步展示页</button>
-          <button type="button" data-prompt="帮我日常巡检" data-confirm-title="日常巡检">日常巡检</button>
-          <button type="button" data-prompt="周度巡检" data-confirm-title="周度巡检">周度巡检</button>
+          <button type="button" data-prompt="帮我日常巡检" data-confirm-title="日常巡检" data-confirm-phrase="确认执行修复">日常巡检</button>
+          <button type="button" data-action="friday_inspection" data-force-confirm="true" data-confirm-title="周度巡检">周度巡检</button>
+          <button class="adjustment-command" type="button" data-action="thursday_adjustment" data-confirm-title="计划日期顺延">计划日期顺延</button>
           <button class="repair-command" type="button" data-action="repair_delayed_test" data-confirm-title="修复提测">修复提测</button>
           <button class="repair-command" type="button" data-action="repair_delayed_online" data-confirm-title="修复上线">修复上线</button>
         </div>
@@ -54,6 +55,8 @@
       <button class="active" type="button" data-view-tab="dashboard">巡检看板</button>
       <button type="button" data-view-tab="chat">AI 对话</button>
     </nav>
+
+    <section id="freshnessPanel" class="freshness-panel dashboard-view"></section>
 
     <section class="metric-grid dashboard-view" id="overview"></section>
 
@@ -157,6 +160,19 @@
         </div>
         <div id="aiUsers" class="ai-user-grid"></div>
       </div>
+    </section>
+
+    <section class="panel agent-trace-panel dashboard-view">
+      <div class="panel-head compact">
+        <div>
+          <h2>Agent 轨迹</h2>
+          <p>工具调用、确认门、执行结果和来源审计</p>
+        </div>
+        <div class="panel-actions">
+          <button id="refreshAgentTraceBtn" type="button">刷新轨迹</button>
+        </div>
+      </div>
+      <div id="agentTrace" class="agent-trace"></div>
     </section>
   </main>
 

@@ -184,10 +184,13 @@
     .public-trend-visual {
       grid-column: 1 / -1;
       margin: 2px 0 0;
+      aspect-ratio: 1817 / 866;
       border: 1px solid rgba(201, 214, 225, 0.92);
       border-radius: 18px;
       overflow: hidden;
-      background: linear-gradient(180deg, #ffffff, #f8fbfd);
+      background:
+        radial-gradient(circle at 50% 12%, rgba(36, 111, 168, 0.04), transparent 46%),
+        linear-gradient(180deg, #ffffff, #f8fbfd);
       box-shadow:
         0 18px 34px rgba(23, 33, 43, 0.08),
         inset 0 1px 0 rgba(255,255,255,0.9);
@@ -195,7 +198,7 @@
     .public-trend-visual img {
       display: block;
       width: 100%;
-      height: 320px;
+      height: 100%;
       object-fit: cover;
       object-position: center;
       opacity: 0.96;
@@ -405,7 +408,7 @@
         grid-column: auto;
       }
       .public-trend-visual img {
-        height: 190px;
+        height: 100%;
       }
       .public-trend-stack-card,
       .public-trend-stack-card.active {
@@ -445,7 +448,7 @@
       </div>
       <div class="header-meta">
         <span>收银台&amp;内单交易域</span>
-        <span>2026-05-04 ~ 2026-05-08</span>
+        <span>2026-05-04 ~ 2026-05-09</span>
       </div>
     </header>
 
@@ -500,7 +503,7 @@
               <div class="metric-label">延期提测率</div>
               <div class="metric-value">0%</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>延期提测率-周（5-&gt;4）-汇总-C3维度</span>
               </div>
               
@@ -522,9 +525,9 @@
                 <span class="metric-caption">OKR 指标</span>
               </div>
               <div class="metric-label">延期上线率</div>
-              <div class="metric-value">2.7%</div>
+              <div class="metric-value">0%</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>延期上线率-周（5-&gt;4）-汇总-C3维度</span>
               </div>
               
@@ -546,9 +549,9 @@
                 <span class="metric-caption">OKR 指标</span>
               </div>
               <div class="metric-label">技术改造工时占比</div>
-              <div class="metric-value">1.88%</div>
+              <div class="metric-value">0%</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>技术改造工时占比-周（5-&gt;4）-汇总-C3维度</span>
               </div>
               
@@ -570,9 +573,9 @@
                 <span class="metric-caption">OKR 指标</span>
               </div>
               <div class="metric-label">双周交付率</div>
-              <div class="metric-value">48.72%</div>
+              <div class="metric-value">37.5%</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>双周交付率</span>
               </div>
               
@@ -596,7 +599,7 @@
               <div class="metric-label">提测待处理</div>
               <div class="metric-value">0 <span class="muted">个</span></div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>收银台&amp;内单交易域修复筛选结果</span>
               </div>
               
@@ -609,7 +612,7 @@
               <div class="metric-label">上线待处理</div>
               <div class="metric-value">0 <span class="muted">个</span></div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>收银台&amp;内单交易域修复筛选结果</span>
               </div>
               
@@ -620,9 +623,9 @@
                 <span class="metric-caption">交付结构</span>
               </div>
               <div class="metric-label">持续交付占比</div>
-              <div class="metric-value">87.5%</div>
+              <div class="metric-value">83.33%</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>持续交付</span>
               </div>
               
@@ -633,9 +636,9 @@
                 <span class="metric-caption">AI 使用</span>
               </div>
               <div class="metric-label">AI 非深度用户数</div>
-              <div class="metric-value">25</div>
+              <div class="metric-value">20</div>
               <div class="metric-foot">
-                <span>2026-05-08</span>
+                <span>2026-05-09</span>
                 <span>AI 深度用户占比 - 软开测试岗</span>
               </div>
               
@@ -665,7 +668,7 @@
               <strong class="public-trend-stack-title">延期提测需求数</strong>
               <span class="public-trend-stack-foot">
                 <span class="public-trend-stack-value">0</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -682,7 +685,7 @@
               <strong class="public-trend-stack-title">延期上线需求数</strong>
               <span class="public-trend-stack-foot">
                 <span class="public-trend-stack-value">0</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -698,8 +701,8 @@
               </span>
               <strong class="public-trend-stack-title">技术改造工时占比</strong>
               <span class="public-trend-stack-foot">
-                <span class="public-trend-stack-value">1.88%</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-value">0%</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -715,8 +718,8 @@
               </span>
               <strong class="public-trend-stack-title">双周交付率</strong>
               <span class="public-trend-stack-foot">
-                <span class="public-trend-stack-value">48.72%</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-value">37.5%</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -732,8 +735,8 @@
               </span>
               <strong class="public-trend-stack-title">AI 深度用户为否</strong>
               <span class="public-trend-stack-foot">
-                <span class="public-trend-stack-value">25</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-value">20</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -749,8 +752,8 @@
               </span>
               <strong class="public-trend-stack-title">持续交付占比</strong>
               <span class="public-trend-stack-foot">
-                <span class="public-trend-stack-value">87.5%</span>
-                <span class="public-trend-stack-meta">2026-05-08</span>
+                <span class="public-trend-stack-value">83.33%</span>
+                <span class="public-trend-stack-meta">2026-05-09</span>
               </span>
             </button>
             
@@ -762,20 +765,20 @@
             <div class="public-trend-stage-copy">
               <div class="public-trend-stage-kicker">当前细节</div>
               <div class="public-trend-stage-title" id="publicTrendTitle">技术改造工时占比</div>
-              <div class="public-trend-stage-meta" id="publicTrendMeta">最新值 1.88% / 2026-05-08</div>
+              <div class="public-trend-stage-meta" id="publicTrendMeta">最新值 0% / 2026-05-09</div>
             </div>
             <div class="public-trend-stage-stats">
               <div class="public-trend-stage-stat">
                 <span>最新值</span>
-                <strong id="publicTrendLatest">1.88%</strong>
+                <strong id="publicTrendLatest">0%</strong>
               </div>
               <div class="public-trend-stage-stat">
                 <span>时间范围</span>
-                <strong id="publicTrendRange">2026-05-06 ~ 2026-05-08</strong>
+                <strong id="publicTrendRange">2026-05-06 ~ 2026-05-09</strong>
               </div>
               <div class="public-trend-stage-stat">
                 <span>采样点</span>
-                <strong id="publicTrendCount">3</strong>
+                <strong id="publicTrendCount">4</strong>
               </div>
             </div>
             <div class="public-trend-stage-canvas">
@@ -791,7 +794,7 @@
         <div class="panel-head compact">
           <div>
             <h2>AI 非深度用户</h2>
-            <p id="publicAiMeta">2026-05-08 · 共 25 人</p>
+            <p id="publicAiMeta">2026-05-09 · 共 20 人</p>
           </div>
         </div>
         <div class="public-ai-grid">
@@ -808,11 +811,6 @@
             <span class="ai-user-pill" title="常彦升">
               <span class="ai-user-avatar">常</span>
               <span class="ai-user-name">常彦升</span>
-            </span>
-            
-            <span class="ai-user-pill" title="桂斌">
-              <span class="ai-user-avatar">桂</span>
-              <span class="ai-user-name">桂斌</span>
             </span>
             
             <span class="ai-user-pill" title="兰春秋">
@@ -855,24 +853,9 @@
               <span class="ai-user-name">邱登辉</span>
             </span>
             
-            <span class="ai-user-pill" title="覃杨阳">
-              <span class="ai-user-avatar">覃</span>
-              <span class="ai-user-name">覃杨阳</span>
-            </span>
-            
-            <span class="ai-user-pill" title="王佳斌(Bin)">
-              <span class="ai-user-avatar">王</span>
-              <span class="ai-user-name">王佳斌(Bin)</span>
-            </span>
-            
             <span class="ai-user-pill" title="王诗赋">
               <span class="ai-user-avatar">王</span>
               <span class="ai-user-name">王诗赋</span>
-            </span>
-            
-            <span class="ai-user-pill" title="王朝华">
-              <span class="ai-user-avatar">王</span>
-              <span class="ai-user-name">王朝华</span>
             </span>
             
             <span class="ai-user-pill" title="温丽星">
@@ -898,11 +881,6 @@
             <span class="ai-user-pill" title="张鑫">
               <span class="ai-user-avatar">张</span>
               <span class="ai-user-name">张鑫</span>
-            </span>
-            
-            <span class="ai-user-pill" title="张欣强">
-              <span class="ai-user-avatar">张</span>
-              <span class="ai-user-name">张欣强</span>
             </span>
             
             <span class="ai-user-pill" title="赵梓博">
@@ -940,7 +918,7 @@
     </div>
   </main>
 
-  <script id="staticChartData" type="application/json">[{"id": "delay_test_rate:delayed_test_requirements", "key": "delayed_test_requirements", "title": "延期提测需求数", "unit": "count", "points": [{"date": "2026-05-08", "value": 0, "unit": "count"}]}, {"id": "delay_online_rate:delayed_online_requirements", "key": "delayed_online_requirements", "title": "延期上线需求数", "unit": "count", "points": [{"date": "2026-05-08", "value": 0, "unit": "count"}]}, {"id": "technical_refactor_working_hours:technical_refactor_working_hours_rate", "key": "technical_refactor_working_hours_rate", "title": "技术改造工时占比", "unit": "%", "points": [{"date": "2026-05-06", "value": 1.47, "unit": "%"}, {"date": "2026-05-07", "value": 1.45, "unit": "%"}, {"date": "2026-05-08", "value": 1.88, "unit": "%"}]}, {"id": "bi_weekly_delivery_rate:biweekly_delivery_rate", "key": "biweekly_delivery_rate", "title": "双周交付率", "unit": "%", "points": [{"date": "2026-05-06", "value": 61.54, "unit": "%"}, {"date": "2026-05-07", "value": 50.0, "unit": "%"}, {"date": "2026-05-08", "value": 48.72, "unit": "%"}]}, {"id": "ai_inspection:ai_non_deep_users", "key": "ai_non_deep_users", "title": "AI 深度用户为否", "unit": "count", "points": [{"date": "2026-05-08", "value": 25, "unit": "count"}]}, {"id": "continuous_delivery:continuous_delivery_team_space_online_requirement_rate", "key": "continuous_delivery_team_space_online_requirement_rate", "title": "持续交付占比", "unit": "%", "points": [{"date": "2026-05-08", "value": 87.5, "unit": "%"}]}]</script>
+  <script id="staticChartData" type="application/json">[{"id": "delay_test_rate:delayed_test_requirements", "key": "delayed_test_requirements", "title": "延期提测需求数", "unit": "count", "points": [{"date": "2026-05-09", "value": 0, "unit": "count"}]}, {"id": "delay_online_rate:delayed_online_requirements", "key": "delayed_online_requirements", "title": "延期上线需求数", "unit": "count", "points": [{"date": "2026-05-08", "value": 0, "unit": "count", "source": "repair_history", "display_domain": "收银台&内单交易域"}, {"date": "2026-05-09", "value": 0, "unit": "count"}]}, {"id": "technical_refactor_working_hours:technical_refactor_working_hours_rate", "key": "technical_refactor_working_hours_rate", "title": "技术改造工时占比", "unit": "%", "points": [{"date": "2026-05-06", "value": 1.47, "unit": "%"}, {"date": "2026-05-07", "value": 1.45, "unit": "%"}, {"date": "2026-05-08", "value": 1.88, "unit": "%"}, {"date": "2026-05-09", "value": 0.0, "unit": "%"}]}, {"id": "bi_weekly_delivery_rate:biweekly_delivery_rate", "key": "biweekly_delivery_rate", "title": "双周交付率", "unit": "%", "points": [{"date": "2026-05-06", "value": 61.54, "unit": "%"}, {"date": "2026-05-07", "value": 50.0, "unit": "%"}, {"date": "2026-05-08", "value": 48.72, "unit": "%"}, {"date": "2026-05-09", "value": 37.5, "unit": "%"}]}, {"id": "ai_inspection:ai_non_deep_users", "key": "ai_non_deep_users", "title": "AI 深度用户为否", "unit": "count", "points": [{"date": "2026-05-09", "value": 20, "unit": "count"}]}, {"id": "continuous_delivery:continuous_delivery_team_space_online_requirement_rate", "key": "continuous_delivery_team_space_online_requirement_rate", "title": "持续交付占比", "unit": "%", "points": [{"date": "2026-05-09", "value": 83.33, "unit": "%"}]}]</script>
   <script>
     (() => {
       const fmt = (value, unit = "") => {

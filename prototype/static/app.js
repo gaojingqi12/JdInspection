@@ -4,6 +4,7 @@ const state = {
   expandedChart: "",
   jobsTimer: null,
   actions: [],
+  auditEvents: [],
   chatSessions: [],
   currentChatSessionId: "",
   aiConfig: null,
@@ -60,7 +61,7 @@ const actionCompactLabels = {
   aggregate_report: "刷新总报告",
   friday_report_text: "周报备文案",
   thursday_report: "日期调整报告",
-  thursday_adjustment: "执行日期调整",
+  thursday_adjustment: "计划日期顺延",
   repair_delayed_test: "修复延期提测",
   repair_delayed_online: "修复延期上线",
 };
@@ -214,6 +215,10 @@ function statusClass(status) {
   return ["success", "partial", "failed", "missing"].includes(status) ? status : "";
 }
 
+function actionLabel(action) {
+  return actionCompactLabels[action] || action || "-";
+}
+
 function renderHeader(summary) {
   $("department").textContent = `${summary.display_domain || summary.department_c3 || "-"}`;
   $("range").textContent = `${summary.time_range?.start_date || "-"} ~ ${summary.time_range?.end_date || "-"}`;
@@ -268,17 +273,45 @@ function groupActions(actions) {
 
 function actionSelectLabel(action) {
   const base = actionCompactLabels[action.id] || action.title || action.id;
+  const availability = action.availability || {};
+  if (availability.scheduled && availability.can_run === false) {
+    return `${base} · ${availability.weekday_label || "待执行日"}`;
+  }
   return action.risk === "write" ? `${base} · 需确认` : base;
+}
+
+function actionCanRun(action) {
+  return (action?.availability || {}).can_run !== false;
+}
+
+function actionUnavailableText(action) {
+  const availability = action?.availability || {};
+  return availability.reason || "当前不在该操作的执行窗口。";
+}
+
+function findAction(actionId) {
+  return (state.actions || []).find((action) => action.id === actionId);
+}
+
+function applyActionAvailability() {
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    const action = findAction(button.dataset.action || "");
+    if (!action) return;
+    const disabled = !actionCanRun(action);
+    button.disabled = disabled;
+    button.classList.toggle("is-disabled-by-schedule", disabled);
+    button.title = disabled ? actionUnavailableText(action) : (action.description || "");
+  });
 }
 
 function renderActions() {
   const featuredIds = [
     "daily_inspection",
     "friday_inspection",
+    "thursday_adjustment",
     "repair_delayed_test",
     "repair_delayed_online",
     "aggregate_report",
-    "thursday_report",
   ];
   const featured = featuredIds
     .map((id) => state.actions.find((action) => action.id === id))
@@ -290,8 +323,8 @@ function renderActions() {
           <span class="action-title">${escapeHtml(action.title)}</span>
           <span class="risk-badge ${action.risk === "write" ? "write" : ""}">${action.risk === "write" ? "需确认" : "只读"}</span>
         </div>
-        <div class="action-desc">${escapeHtml(action.description || "")}</div>
-        <button type="button" data-action="${escapeHtml(action.id)}">${action.risk === "write" ? "准备执行" : "执行"}</button>
+        ${!actionCanRun(action) ? `<div class="action-schedule-note">${escapeHtml(actionUnavailableText(action))}</div>` : ""}
+        <button type="button" data-action="${escapeHtml(action.id)}"${!actionCanRun(action) ? " disabled" : ""}>${action.risk === "write" ? "准备执行" : "执行"}</button>
       </article>
     `).join("")
     : `<div class="list-item">暂无可用功能</div>`;
@@ -307,9 +340,14 @@ function renderActions() {
   `).join("");
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await runAction(button.dataset.action || "");
+      await runAction(button.dataset.action || "", {
+        forceConfirm: button.dataset.forceConfirm === "true",
+        confirmTitle: button.dataset.confirmTitle || "",
+        button,
+      });
     });
   });
+  applyActionAvailability();
 }
 
 function latestNonNull(points) {
@@ -440,7 +478,7 @@ function drawTrendChart(canvas, option, { compact = false } = {}) {
   const points = (option.points || []).filter((point) => point.value !== null && point.value !== undefined);
   const rect = canvas.getBoundingClientRect();
   const cssWidth = Math.max(220, Math.floor(rect.width));
-  const cssHeight = Math.max(compact ? 130 : 320, Math.floor(rect.height));
+  const cssHeight = Math.max(compact ? 210 : 460, Math.floor(rect.height));
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   const bitmapWidth = Math.floor(cssWidth * dpr);
   const bitmapHeight = Math.floor(cssHeight * dpr);
@@ -453,8 +491,8 @@ function drawTrendChart(canvas, option, { compact = false } = {}) {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
   const pad = compact
-    ? { left: 58, right: 16, top: 18, bottom: 34 }
-    : { left: 72, right: 34, top: 34, bottom: 58 };
+    ? { left: 66, right: 22, top: 26, bottom: 44 }
+    : { left: 84, right: 42, top: 46, bottom: 68 };
   const width = cssWidth - pad.left - pad.right;
   const height = cssHeight - pad.top - pad.bottom;
 
@@ -495,7 +533,7 @@ function drawTrendChart(canvas, option, { compact = false } = {}) {
   const xFor = (index) => pad.left + (points.length === 1 ? width / 2 : (index / (points.length - 1)) * width);
 
   ctx.strokeStyle = "#246fa8";
-  ctx.lineWidth = compact ? 3 : 4;
+  ctx.lineWidth = compact ? 3.5 : 4.5;
   ctx.beginPath();
   points.forEach((point, index) => {
     const x = xFor(index);
@@ -510,28 +548,28 @@ function drawTrendChart(canvas, option, { compact = false } = {}) {
     const y = yFor(Number(point.value));
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = "#246fa8";
-    ctx.lineWidth = compact ? 2.5 : 3;
+    ctx.lineWidth = compact ? 3 : 3.5;
     ctx.beginPath();
-    ctx.arc(x, y, compact ? 4.5 : 6, 0, Math.PI * 2);
+    ctx.arc(x, y, compact ? 5.5 : 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     const valueText = fmt(point.value, option.unit);
-    ctx.font = `700 ${compact ? 10 : 15}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.font = `760 ${compact ? 12 : 17}px -apple-system, BlinkMacSystemFont, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const textWidth = ctx.measureText(valueText).width;
-    const pointOffset = compact ? 14 : 20;
+    const pointOffset = compact ? 18 : 24;
     let labelX = x;
     let labelY = y - pointOffset;
     if (compact) {
-      if (index === 0 && points.length > 1) labelX = x + textWidth / 2 + 10;
-      if (index === points.length - 1 && points.length > 1) labelX = x - textWidth / 2 - 10;
-      labelY = Math.max(pad.top + 12, Math.min(pad.top + height - 12, labelY));
-      ctx.fillStyle = "rgba(255,255,255,0.78)";
-      const rectX = labelX - textWidth / 2 - 4;
-      const rectY = labelY - 8;
-      ctx.fillRect(rectX, rectY, textWidth + 8, 16);
+      if (index === 0 && points.length > 1) labelX = x + textWidth / 2 + 12;
+      if (index === points.length - 1 && points.length > 1) labelX = x - textWidth / 2 - 12;
+      labelY = Math.max(pad.top + 16, Math.min(pad.top + height - 16, labelY));
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      const rectX = labelX - textWidth / 2 - 5;
+      const rectY = labelY - 10;
+      ctx.fillRect(rectX, rectY, textWidth + 10, 20);
       ctx.fillStyle = "#1d2a36";
     } else {
       labelY = Math.max(pad.top + 14, labelY);
@@ -539,14 +577,14 @@ function drawTrendChart(canvas, option, { compact = false } = {}) {
     }
     ctx.fillText(valueText, labelX, labelY);
     ctx.fillStyle = "#62707c";
-    ctx.font = `600 ${compact ? 10 : 14}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.font = `650 ${compact ? 12 : 15}px -apple-system, BlinkMacSystemFont, sans-serif`;
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(String(point.date || "").slice(5), x, pad.top + height + 30);
+    ctx.fillText(String(point.date || "").slice(5), x, pad.top + height + (compact ? 34 : 40));
   });
 
   ctx.textAlign = "right";
   ctx.fillStyle = "#62707c";
-  ctx.font = `600 ${compact ? 10 : 14}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.font = `650 ${compact ? 12 : 15}px -apple-system, BlinkMacSystemFont, sans-serif`;
   ctx.fillText(fmt(max, option.unit), pad.left - 10, pad.top + 4);
   ctx.fillText(fmt(min, option.unit), pad.left - 10, pad.top + height + 4);
 }
@@ -726,6 +764,14 @@ async function loadJobs() {
   renderJobs(payload.jobs || []);
 }
 
+async function loadAgentTrace() {
+  const res = await fetch("/api/tools/audit");
+  if (!res.ok) return;
+  const payload = await res.json();
+  state.auditEvents = payload.events || [];
+  renderAgentTrace(state.auditEvents);
+}
+
 async function clearJobs() {
   const res = await fetch("/api/jobs/clear", { method: "POST" });
   if (!res.ok) return;
@@ -735,7 +781,25 @@ async function clearJobs() {
 
 async function runAction(action, options = {}) {
   if (!action) return;
-  const actionMeta = state.actions.find((item) => item.id === action) || {};
+  const actionMeta = findAction(action) || {};
+  const triggerButton = options.button || null;
+  const originalText = triggerButton?.textContent || "";
+  const setButtonText = (text, disabled = true) => {
+    if (!triggerButton) return;
+    triggerButton.textContent = text;
+    triggerButton.disabled = disabled;
+  };
+  const restoreButton = () => {
+    if (!triggerButton) return;
+    triggerButton.textContent = originalText;
+    triggerButton.disabled = actionMeta.id ? !actionCanRun(actionMeta) : false;
+  };
+  if (actionMeta.id && !actionCanRun(actionMeta)) {
+    setButtonText("不可执行", true);
+    appendMessage("assistant", actionUnavailableText(actionMeta));
+    window.setTimeout(restoreButton, 1600);
+    return;
+  }
   const confirmPhrase = actionMeta.confirm_phrase || "";
   let message = "";
   const needsConfirm = options.forceConfirm || actionMeta.risk === "write";
@@ -755,22 +819,37 @@ async function runAction(action, options = {}) {
       message = confirmPhrase;
     }
   }
-  const res = await fetch("/api/actions/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, message }),
-  });
-  const payload = await res.json();
-  appendMessage("assistant", payload.answer || payload.message || "动作已提交。");
-  if (payload.job) {
+  setButtonText("提交中...", true);
+  try {
+    const res = await fetch("/api/actions/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, message }),
+    });
+    const payload = await res.json();
+    appendMessage("assistant", payload.answer || payload.message || "动作已提交。");
     await loadJobs();
-    ensureJobsPolling();
+    await loadAgentTrace();
+    if (payload.job) {
+      setButtonText("已提交", true);
+      ensureJobsPolling();
+    } else if (payload.error) {
+      setButtonText("未提交", true);
+    } else {
+      setButtonText("已处理", true);
+    }
+  } catch (error) {
+    appendMessage("assistant", "动作提交失败，请检查服务是否正在运行。");
+    setButtonText("提交失败", true);
+  } finally {
+    window.setTimeout(restoreButton, 1800);
   }
 }
 
 async function runToolbarPrompt(button) {
   const prompt = button.dataset.prompt || "";
   if (!prompt) return;
+  const confirmPhrase = button.dataset.confirmPhrase || "";
   const ok = await openConfirmModal({
     title: button.dataset.confirmTitle || button.textContent.trim() || "确认执行",
     description: "确认后会切换到 AI 对话页，并立即开始对应巡检或问答流程。",
@@ -778,7 +857,10 @@ async function runToolbarPrompt(button) {
   });
   if (!ok) return;
   switchView("chat");
-  await sendChat(prompt);
+  const confirmedPrompt = confirmPhrase && !prompt.includes(confirmPhrase)
+    ? `${prompt}，${confirmPhrase}`
+    : prompt;
+  await sendChat(confirmedPrompt);
 }
 
 function renderJobs(jobs) {
@@ -799,9 +881,118 @@ function renderJobs(jobs) {
     : `<div class="list-item">暂无任务</div>`;
 }
 
+function toolEventTone(eventName = "", jobStatus = "") {
+  if (eventName.includes("confirmation_required")) return "blocked";
+  if (eventName.includes("rejected") || jobStatus === "failed" || jobStatus === "timeout") return "failed";
+  if (eventName.includes("finished") || jobStatus === "success") return "success";
+  return "running";
+}
+
+function toolEventLabel(event = {}) {
+  const eventName = event.event || "";
+  const status = event.job?.status || event.tool_result?.job?.status || event.tool_result?.status || "";
+  if (eventName === "planner_completed") return "Planner";
+  if (eventName === "evaluator_completed") return "Evaluator";
+  if (eventName.includes("confirmation_required")) return "确认门";
+  if (eventName.includes("rejected")) return "已拒绝";
+  if (eventName.includes("queued")) return "已入队";
+  if (eventName.includes("finished")) return status === "success" ? "已完成" : status || "已结束";
+  return eventName || "事件";
+}
+
+function compactPayload(value) {
+  const text = JSON.stringify(value || {}, null, 2);
+  return text.length > 1800 ? `${text.slice(0, 1800)}\n...` : text;
+}
+
+function renderAgentTrace(events) {
+  const latest = [...(events || [])].reverse().slice(0, 30);
+  $("agentTrace").innerHTML = latest.length
+    ? latest.map((event) => {
+      const toolCall = event.tool_call || event.tool_result?.tool_call || {};
+      const action = event.action || event.tool_result?.action || "";
+      const job = event.job || event.tool_result?.job || {};
+      const source = toolCall.source || "-";
+      const subject = event.event === "planner_completed"
+        ? (event.plan?.plan_type || "规划完成")
+        : event.event === "evaluator_completed"
+          ? (event.evaluation?.status || "评估完成")
+          : (toolCall.name || "-");
+      const tone = toolEventTone(event.event, job.status || event.tool_result?.status || "");
+      const payload = {
+        tool_call: toolCall,
+        tool_result: event.tool_result,
+        job: event.job,
+        plan: event.plan,
+        evaluation: event.evaluation,
+        required_phrase: event.required_phrase,
+      };
+      return `
+        <article class="agent-trace-item ${escapeHtml(tone)}">
+          <div class="agent-trace-stamp">
+            <span>${escapeHtml(String(event.time || "-").slice(5, 16))}</span>
+          </div>
+          <div class="agent-trace-body">
+            <div class="agent-trace-title">
+              <span class="trace-badge">${escapeHtml(toolEventLabel(event))}</span>
+              <strong>${escapeHtml(action ? actionLabel(action) : toolEventLabel(event))}</strong>
+              <span>${escapeHtml(subject)}</span>
+            </div>
+            <div class="agent-trace-meta">
+              <span>来源：${escapeHtml(source)}</span>
+              <span>事件：${escapeHtml(event.event || "-")}</span>
+              ${job.id ? `<span>job：${escapeHtml(job.id)}</span>` : ""}
+            </div>
+            <details class="agent-trace-detail">
+              <summary>参数 / 结果</summary>
+              <pre>${escapeHtml(compactPayload(payload))}</pre>
+            </details>
+          </div>
+        </article>
+      `;
+    }).join("")
+    : `<div class="list-item">暂无 Agent 工具调用轨迹</div>`;
+}
+
+function renderFreshnessPanel(summary) {
+  const items = summary.freshness?.fixed_cycle_reports || [];
+  const panel = $("freshnessPanel");
+  if (!items.length) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="freshness-head">
+      <div>
+        <h2>固定周期数据</h2>
+        <p>周四/周五模块只展示本周有效窗口内的数据</p>
+      </div>
+    </div>
+    <div class="freshness-grid">
+      ${items.map((item) => `
+        <article class="freshness-card freshness-${escapeHtml(item.state || "unknown")}">
+          <div class="freshness-title-row">
+            <strong>${escapeHtml(item.title || "-")}</strong>
+            <span>${escapeHtml(item.label || "-")}</span>
+          </div>
+          <p>${escapeHtml(item.message || "")}</p>
+          <div class="freshness-meta">
+            <span>执行日：${escapeHtml(item.expected_date || "-")}</span>
+            <span>数据日：${escapeHtml(item.source_date || "-")}</span>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function ensureJobsPolling() {
   if (state.jobsTimer) return;
-  state.jobsTimer = setInterval(loadJobs, 3000);
+  state.jobsTimer = setInterval(async () => {
+    await loadJobs();
+    await loadAgentTrace();
+  }, 3000);
 }
 
 function parseStreamEvent(block) {
@@ -859,6 +1050,11 @@ async function sendChat(message) {
       if (!event) continue;
       if (event.type === "meta") {
         state.currentChatSessionId = event.payload.session_id || state.currentChatSessionId;
+        if (event.payload.job || event.payload.jobs?.length || event.payload.action !== "none") {
+          await loadJobs();
+          await loadAgentTrace();
+          ensureJobsPolling();
+        }
       } else if (event.type === "delta") {
         assistantNode.textContent += event.payload.text || "";
         $("messages").scrollTop = $("messages").scrollHeight;
@@ -884,7 +1080,10 @@ async function sendChat(message) {
     }
     if (donePayload.job) {
       await loadJobs();
+      await loadAgentTrace();
       ensureJobsPolling();
+    } else if (donePayload.tool_call || donePayload.tool_calls?.length) {
+      await loadAgentTrace();
     }
   } else if (!assistantNode.textContent) {
     assistantNode.textContent = "没有返回内容";
@@ -894,6 +1093,7 @@ async function sendChat(message) {
 function render() {
   const summary = state.summary || {};
   renderHeader(summary);
+  renderFreshnessPanel(summary);
   renderOverview(summary);
   renderTrendGrid(summary);
   renderAiUsers(summary);
@@ -926,6 +1126,7 @@ $("modelSelect").addEventListener("change", async () => {
   await saveSettings();
 });
 $("refreshJobsBtn").addEventListener("click", loadJobs);
+$("refreshAgentTraceBtn").addEventListener("click", loadAgentTrace);
 $("clearJobsBtn").addEventListener("click", clearJobs);
 $("clearChatBtn").addEventListener("click", async () => {
   await clearChat();
@@ -937,7 +1138,7 @@ $("clearHistoryBtn").addEventListener("click", async () => {
   await clearChatHistory();
 });
 $("runMoreActionBtn").addEventListener("click", async () => {
-  await runAction($("moreActionSelect").value);
+  await runAction($("moreActionSelect").value, { button: $("runMoreActionBtn") });
 });
 document.querySelectorAll("[data-view-tab]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -994,6 +1195,7 @@ loadAiConfig().catch(() => renderSettings(defaultSettings));
 loadChatSessions().catch((error) => appendMessage("assistant", `对话历史加载失败：${error.message}`));
 loadActions().catch((error) => appendMessage("assistant", `功能加载失败：${error.message}`));
 loadJobs();
+loadAgentTrace();
 loadSummary().catch((error) => {
   appendMessage("assistant", `加载失败：${error.message}`);
 });

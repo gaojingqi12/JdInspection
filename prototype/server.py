@@ -22,10 +22,15 @@ from actions import (
 )
 from agent_tools import (
     action_from_tool_call,
+    build_agent_plan,
     detect_tool_call,
     execute_tool_call,
+    evaluate_agent_state,
+    next_tool_call_after_result,
+    normalize_model_tool_call,
     openai_tool_schemas,
     public_tools,
+    render_tool_chain_summary,
     resolve_routed_tool_call,
     tool_call_from_action,
     tool_catalog_for_prompt,
@@ -36,6 +41,8 @@ from agent_tools import (
 from daily_templates import DailyInspectionRenderer
 from failure_recovery import render_failure_recovery
 from inspection_agent import InspectionAgent, InspectionAgentDeps
+from schedule_policy import fixed_cycle_data_freshness, file_modified_date, parse_date
+from tool_audit import recent_tool_events, record_tool_event
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -43,6 +50,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 SUMMARY_PATH = ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "weekly-inspection-summary.json"
 REPORT_HTML_PATH = ROOT_DIR / "daily-inspection-skill" / "index.html"
 THURSDAY_REPORT_HTML_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "index.html"
+THURSDAY_MODIFIED_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_to_friday_modified.json"
+THURSDAY_DEMANDS_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_demands.json"
+THURSDAY_SUBMIT_TEST_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_submit_test_demands.json"
+THURSDAY_ONLINE_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_online_demands.json"
 WEEKLY_METRICS_PATH = ROOT_DIR / "friday-inspection-skill" / "scripts" / "out" / "ine_metrics.json"
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
@@ -473,10 +484,13 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
     .public-trend-visual {{
       grid-column: 1 / -1;
       margin: 2px 0 0;
+      aspect-ratio: 1817 / 866;
       border: 1px solid rgba(201, 214, 225, 0.92);
       border-radius: 18px;
       overflow: hidden;
-      background: linear-gradient(180deg, #ffffff, #f8fbfd);
+      background:
+        radial-gradient(circle at 50% 12%, rgba(36, 111, 168, 0.04), transparent 46%),
+        linear-gradient(180deg, #ffffff, #f8fbfd);
       box-shadow:
         0 18px 34px rgba(23, 33, 43, 0.08),
         inset 0 1px 0 rgba(255,255,255,0.9);
@@ -484,7 +498,7 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
     .public-trend-visual img {{
       display: block;
       width: 100%;
-      height: 320px;
+      height: 100%;
       object-fit: cover;
       object-position: center;
       opacity: 0.96;
@@ -694,7 +708,7 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
         grid-column: auto;
       }}
       .public-trend-visual img {{
-        height: 190px;
+        height: 100%;
       }}
       .public-trend-stack-card,
       .public-trend-stack-card.active {{
@@ -1262,6 +1276,86 @@ def report_metric(label: str, value, note: str = "") -> str:
     """
 
 
+def weekly_metrics_source_date(data: dict) -> object:
+    meta = data.get("_meta") if isinstance(data.get("_meta"), dict) else {}
+    return (
+        parse_date(meta.get("inspection_date"))
+        or parse_date(meta.get("generated_at"))
+        or file_modified_date(WEEKLY_METRICS_PATH)
+    )
+
+
+def thursday_adjustment_source_date() -> object:
+    candidates = [
+        (THURSDAY_MODIFIED_JSON_PATH, "source_date"),
+        (THURSDAY_DEMANDS_JSON_PATH, "target_date"),
+        (THURSDAY_SUBMIT_TEST_JSON_PATH, "target_date"),
+        (THURSDAY_ONLINE_JSON_PATH, "target_date"),
+    ]
+    for path, key in candidates:
+        data = read_json(path, {})
+        if isinstance(data, dict):
+            parsed = parse_date(data.get(key))
+            if parsed:
+                return parsed
+    return file_modified_date(THURSDAY_MODIFIED_JSON_PATH)
+
+
+def weekly_report_freshness(data: dict | None = None) -> dict:
+    weekly = data if isinstance(data, dict) else read_json(WEEKLY_METRICS_PATH, {})
+    return fixed_cycle_data_freshness(
+        key="weekly",
+        title="周度巡检",
+        weekday=4,
+        source_date=weekly_metrics_source_date(weekly if isinstance(weekly, dict) else {}),
+        exists=WEEKLY_METRICS_PATH.exists() and bool(weekly),
+    )
+
+
+def thursday_report_freshness() -> dict:
+    return fixed_cycle_data_freshness(
+        key="thursday_adjustment",
+        title="计划日期顺延",
+        weekday=3,
+        source_date=thursday_adjustment_source_date(),
+        exists=THURSDAY_MODIFIED_JSON_PATH.exists(),
+    )
+
+
+def data_freshness() -> dict:
+    items = [thursday_report_freshness(), weekly_report_freshness()]
+    return {
+        "fixed_cycle_reports": items,
+        "has_stale_fixed_cycle_data": any(not item.get("is_current") for item in items),
+    }
+
+
+def render_freshness_placeholder_report(title: str, freshness: dict, source_note: str) -> str:
+    sections = [
+        table_section(
+            "数据时效说明",
+            "固定执行日模块只展示本周有效窗口内的数据",
+            ["项目", "说明"],
+            [
+                ["执行频率", html_text(freshness.get("schedule_label") or "-")],
+                ["本周执行日", html_text(freshness.get("expected_date") or "-")],
+                ["上一份数据日期", html_text(freshness.get("source_date") or "-")],
+                ["处理策略", html_text("上一周期数据已归档，不参与当前看板、报告和 Agent 回答。")],
+            ],
+        )
+    ]
+    return report_shell(
+        title,
+        str(freshness.get("message") or "当前没有可展示的本周数据。"),
+        [
+            report_metric("状态", freshness.get("label") or "-", freshness.get("message") or ""),
+            report_metric("本周执行日", freshness.get("expected_date") or "-", freshness.get("schedule_label") or ""),
+            report_metric("上一份数据", freshness.get("source_date") or "-", source_note),
+        ],
+        sections,
+    )
+
+
 def report_shell(title: str, subtitle: str, metrics: list[str], sections: list[str], generated_at: str = "") -> str:
     generated = generated_at or now_text()
     return f"""<!doctype html>
@@ -1517,6 +1611,9 @@ def render_repair_report_html() -> str:
 
 
 def render_thursday_report_html() -> str:
+    freshness = thursday_report_freshness()
+    if not freshness.get("is_current"):
+        return render_freshness_placeholder_report("计划日期顺延报告", freshness, "历史顺延记录不参与本周展示")
     if not THURSDAY_REPORT_HTML_PATH.exists():
         return report_shell("计划日期调整报告", "当前未找到报告文件", [report_metric("状态", "missing", "thursday-to-friday-adjustment/index.html")], [])
     html = THURSDAY_REPORT_HTML_PATH.read_text(encoding="utf-8")
@@ -1565,6 +1662,9 @@ def weekly_value(row: dict, key: str) -> str:
 
 def render_weekly_report_html() -> str:
     weekly = read_weekly_metrics()
+    freshness = weekly_report_freshness(weekly)
+    if not freshness.get("is_current"):
+        return render_freshness_placeholder_report("周度巡检报告", freshness, "历史周报数据不参与本周展示")
     if not weekly:
         return report_shell(
             "周度巡检报告",
@@ -1581,7 +1681,7 @@ def render_weekly_report_html() -> str:
     ]
     available_metrics = [name for name in metric_order if isinstance(weekly.get(name), dict)]
     if not available_metrics:
-        available_metrics = [name for name, value in weekly.items() if isinstance(value, dict)]
+        available_metrics = [name for name, value in weekly.items() if isinstance(value, dict) and not str(name).startswith("_")]
 
     overview_rows = []
     detail_sections = []
@@ -1800,6 +1900,7 @@ def chat_model_context(summary: dict, session_id: str = "") -> dict:
         "department_c3": summary.get("department_c3"),
         "display_domain": summary.get("display_domain"),
         "overview": build_overview(summary)[:10],
+        "freshness": summary.get("freshness") or data_freshness(),
         "daily_inspection_assessment": daily_inspection_assessment(summary),
         "agent_memory": read_agent_memory(session_id),
     }
@@ -1879,12 +1980,15 @@ def route_intent_with_model(
         "inspection_date": summary.get("inspection_date"),
         "display_domain": summary.get("display_domain"),
         "daily_inspection_status": daily_inspection_assessment(summary).get("status"),
+        "freshness": summary.get("freshness") or data_freshness(),
         "memory": memory,
         "tools": tool_catalog_for_prompt(),
     }
     payload = {
         "model": str(config.get("model") or DEFAULT_MODEL).strip(),
         "temperature": 0,
+        "tools": openai_tool_schemas(),
+        "tool_choice": "auto",
         "messages": [
             {"role": "system", "content": INTENT_ROUTER_PROMPT},
             *recent_history,
@@ -1918,7 +2022,20 @@ def route_intent_with_model(
     choices = body.get("choices") or []
     if not choices:
         return fallback
-    content = str((choices[0].get("message") or {}).get("content") or "")
+    message_payload = choices[0].get("message") or {}
+    native_tool_calls = message_payload.get("tool_calls") or []
+    if isinstance(native_tool_calls, list) and native_tool_calls:
+        tool_call = normalize_model_tool_call(native_tool_calls[0])
+        action = action_from_tool_call(tool_call)
+        return {
+            "action": action,
+            "tool_call": tool_call,
+            "confidence": 1 if tool_call else 0,
+            "reason": "模型原生 tool_call",
+            "source": "native-tool-call",
+        }
+
+    content = str(message_payload.get("content") or "")
     routed = extract_json_object(content)
     tool_call = resolve_routed_tool_call({**routed, "source": "llm-router"})
     action = action_from_tool_call(tool_call)
@@ -2124,8 +2241,13 @@ def build_repair_metrics(summary: dict) -> dict[str, dict]:
             continue
 
         repair_summary = repair.get("summary") or {}
-        value = parse_numberish(repair_summary.get(config["count_label"])) or 0
+        value = parse_numberish(repair_summary.get(config["count_label"]))
+        value = value if isinstance(value, (int, float)) else 0
+        trigger_value = parse_numberish((repair.get("trigger") or {}).get("value"))
         status = repair_summary.get("巡检状态") or "-"
+        script_status = str(((repair.get("script") or {}).get("status")) or "")
+        if script_status == "skipped" and isinstance(trigger_value, (int, float)) and trigger_value > 0:
+            status = "待执行修复"
         date_value = repair_summary.get("巡检日期") or repair.get("date") or summary.get("inspection_date")
 
         history_path = repair_history_json_path(repair)
@@ -2247,6 +2369,7 @@ def compact_summary(summary: dict) -> dict:
     payload = dict(summary)
     payload["repair_metrics"] = build_repair_metrics(summary)
     payload["overview"] = build_overview(summary)
+    payload["freshness"] = data_freshness()
     payload["loaded_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     payload["report_html_exists"] = REPORT_HTML_PATH.exists()
     return payload
@@ -2970,23 +3093,29 @@ def inspection_agent() -> InspectionAgent:
             InspectionAgentDeps(
                 begin_chat_turn=begin_chat_turn,
                 finish_chat_turn=finish_chat_turn,
-                read_summary=lambda: read_json(SUMMARY_PATH, {}),
+                read_summary=lambda: compact_summary(read_json(SUMMARY_PATH, {})),
                 read_memory=read_agent_memory,
                 detect_tool_call=detect_tool_call,
                 route_intent=route_intent_with_model,
                 resolve_routed_tool_call=resolve_routed_tool_call,
                 action_from_tool_call=action_from_tool_call,
+                build_plan=build_agent_plan,
+                assess_summary=daily_inspection_assessment,
+                evaluate_state=evaluate_agent_state,
                 is_inspection_related=is_inspection_related,
                 out_of_scope_answer=out_of_scope_answer,
                 tool_requires_confirmation=tool_requires_confirmation,
                 tool_title=tool_title,
                 execute_tool_call=execute_tool_call,
                 wait_for_job=wait_for_job,
+                next_tool_call=next_tool_call_after_result,
+                render_tool_chain_summary=render_tool_chain_summary,
                 render_failure_recovery=render_failure_recovery,
                 call_chat_model=call_chat_model,
                 call_chat_model_stream=call_chat_model_stream,
                 answer_chat=answer_chat,
                 write_memory=write_agent_memory_from_state,
+                audit_tool_event=record_tool_event,
             )
         )
     return _INSPECTION_AGENT
@@ -3025,6 +3154,8 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             return self.write_json({"actions": public_actions(), "tools": public_tools()})
         if path == "/api/tools":
             return self.write_json({"tools": public_tools(), "openai_tools": openai_tool_schemas()})
+        if path == "/api/tools/audit":
+            return self.write_json({"events": recent_tool_events(100)})
         if path == "/api/ai-config":
             with AI_CONFIG_LOCK:
                 return self.write_json(public_ai_config(load_ai_config()))
@@ -3110,7 +3241,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             if not config.get("api_key"):
                 return self.write_json({"ok": False, "message": "后端还没有配置 API Key。", "config": public_ai_config(config)})
             try:
-                answer = call_chat_model("请只回复：连接正常", "none", read_json(SUMMARY_PATH, {}), config, [])
+                answer = call_chat_model("请只回复：连接正常", "none", compact_summary(read_json(SUMMARY_PATH, {})), config, [])
             except Exception as exc:
                 return self.write_json({"ok": False, "message": f"模型连接失败：{exc}", "config": public_ai_config(config)})
             return self.write_json({"ok": bool(answer), "message": answer or "模型没有返回内容。", "config": public_ai_config(config)})
@@ -3157,6 +3288,10 @@ class PrototypeHandler(BaseHTTPRequestHandler):
                 return self.write_json({"error": "unknown_tool", "message": "未知工具或动作"})
             required = tool_requires_confirmation(tool_call, message)
             if required:
+                record_tool_event(
+                    "api_tool_confirmation_required",
+                    {"action": action, "tool_call": tool_call, "required_phrase": required},
+                )
                 return self.write_json(
                     {
                         "error": "confirmation_required",
@@ -3167,6 +3302,10 @@ class PrototypeHandler(BaseHTTPRequestHandler):
                     }
                 )
             tool_result = execute_tool_call(tool_call)
+            record_tool_event(
+                "api_tool_queued" if tool_result.get("ok") else "api_tool_rejected",
+                {"action": action, "tool_call": tool_call, "tool_result": tool_result},
+            )
             return self.write_json(
                 {
                     "action": action,

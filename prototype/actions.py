@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 import subprocess
 import sys
 import threading
@@ -8,6 +9,8 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from schedule_policy import action_schedule_status, file_modified_date, fixed_cycle_data_freshness, parse_date
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -111,6 +114,16 @@ def step(command: list[str], cwd: Path, label: str) -> dict:
     return {"command": command, "cwd": cwd, "label": label}
 
 
+def read_json_file(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def daily_dir() -> Path:
     return ROOT_DIR / "daily-inspection-skill"
 
@@ -155,7 +168,8 @@ def action_registry() -> dict[str, dict]:
             "title": "日常巡检",
             "group": "主流程",
             "description": "依次执行 OKR、AI、持续交付巡检；如延期提测/上线存在待修复需求，会自动触发修复并刷新总报告。",
-            "risk": "safe",
+            "risk": "write",
+            "confirm_phrase": "确认执行修复",
             "aliases": ["日常巡检", "每日巡检", "帮我日常巡检", "帮我巡检", "daily"],
             "steps": daily_inspection_steps(skip_repair=False),
         },
@@ -173,7 +187,8 @@ def action_registry() -> dict[str, dict]:
             "group": "主流程",
             "description": "抓取周度 INE 指标数据，生成 friday-inspection-skill/scripts/out/ine_metrics.json。",
             "risk": "safe",
-            "aliases": ["周度巡检", "周五巡检", "周五", "friday"],
+            "schedule": {"type": "weekday", "weekday": 4},
+            "aliases": ["周度巡检", "周五巡检", "friday"],
             "steps": friday_inspection_steps(),
         },
         "okr_all": {
@@ -245,6 +260,7 @@ def action_registry() -> dict[str, dict]:
             "group": "报告",
             "description": "读取周度 JSON，生成支付生态研发部报备文案。",
             "risk": "safe",
+            "requires_current_data": "weekly",
             "aliases": ["周报备", "周报备文案", "生成周报文案", "周五报备", "周五报备文案", "生成周五文案"],
             "steps": [
                 step(
@@ -266,17 +282,19 @@ def action_registry() -> dict[str, dict]:
             "group": "日期调整",
             "description": "只读取已有 JSON，刷新计划日期调整 HTML 报告。",
             "risk": "safe",
-            "aliases": ["计划日期调整报告", "刷新日期调整报告", "刷新周四报告", "周四改周五报告", "刷新改周五报告"],
+            "requires_current_data": "thursday_adjustment",
+            "aliases": ["计划日期调整报告", "刷新日期调整报告", "刷新计划日期调整报告"],
             "steps": [step([py, "generate_modification_report.py"], t, "刷新计划日期调整报告")],
         },
         "thursday_adjustment": {
-            "title": "执行计划日期调整",
+            "title": "计划日期顺延",
             "group": "日期调整",
-            "description": "打开星云看板，将命中的计划提测/上线日期调整到目标日期。",
+            "description": "打开星云看板，将计划提测/上线日期命中本周四的需求顺延至本周五。",
             "risk": "write",
+            "schedule": {"type": "weekday", "weekday": 3},
             "confirm_phrase": "确认执行日期调整",
-            "aliases": ["执行计划日期调整", "计划日期调整", "周四改周五", "执行周四改周五", "改周五"],
-            "steps": [step([py, "open_jd_cashier.py"], t, "执行计划日期调整")],
+            "aliases": ["执行计划日期调整", "计划日期调整", "计划日期顺延", "执行计划日期顺延", "本周四顺延至本周五", "计划日期从本周四顺延至本周五"],
+            "steps": [step([py, "open_jd_cashier.py"], t, "执行计划日期顺延")],
         },
         "repair_delayed_test": {
             "title": "修复延期提测",
@@ -299,12 +317,68 @@ def action_registry() -> dict[str, dict]:
     }
 
 
+def weekly_metrics_source_date(data: dict):
+    meta = data.get("_meta") if isinstance(data.get("_meta"), dict) else {}
+    return (
+        parse_date(meta.get("inspection_date"))
+        or parse_date(meta.get("generated_at"))
+        or file_modified_date(friday_dir() / "scripts" / "out" / "ine_metrics.json")
+    )
+
+
+def weekly_current_data_status() -> dict:
+    path = friday_dir() / "scripts" / "out" / "ine_metrics.json"
+    data = read_json_file(path)
+    return fixed_cycle_data_freshness(
+        key="weekly",
+        title="周度巡检",
+        weekday=4,
+        source_date=weekly_metrics_source_date(data),
+        exists=path.exists() and bool(data),
+    )
+
+
+def thursday_adjustment_source_date():
+    candidates = [
+        (thursday_dir() / "thursday_to_friday_modified.json", "source_date"),
+        (thursday_dir() / "thursday_demands.json", "target_date"),
+        (thursday_dir() / "thursday_submit_test_demands.json", "target_date"),
+        (thursday_dir() / "thursday_online_demands.json", "target_date"),
+    ]
+    for path, key in candidates:
+        data = read_json_file(path)
+        parsed = parse_date(data.get(key))
+        if parsed:
+            return parsed
+    return file_modified_date(thursday_dir() / "thursday_to_friday_modified.json")
+
+
+def thursday_current_data_status() -> dict:
+    path = thursday_dir() / "thursday_to_friday_modified.json"
+    return fixed_cycle_data_freshness(
+        key="thursday_adjustment",
+        title="计划日期顺延",
+        weekday=3,
+        source_date=thursday_adjustment_source_date(),
+        exists=path.exists(),
+    )
+
+
+def required_current_data_status(data_key: str) -> dict:
+    if data_key == "weekly":
+        return weekly_current_data_status()
+    if data_key == "thursday_adjustment":
+        return thursday_current_data_status()
+    return {}
+
+
 def public_actions() -> list[dict]:
     items = []
     for action_id, item in action_registry().items():
         public = {key: value for key, value in item.items() if key not in {"steps", "aliases"}}
         public["id"] = action_id
         public["step_count"] = len(item.get("steps", []))
+        public["availability"] = action_availability(action_id)
         items.append(public)
     return items
 
@@ -315,6 +389,32 @@ def action_steps(action: str) -> list[dict]:
 
 def action_title(action: str) -> str:
     return action_registry().get(action, {}).get("title", action)
+
+
+def action_availability(action: str) -> dict:
+    item = action_registry().get(action, {})
+    availability = action_schedule_status(item.get("schedule") if isinstance(item, dict) else None)
+    data_key = str(item.get("requires_current_data") or "") if isinstance(item, dict) else ""
+    freshness = required_current_data_status(data_key) if data_key else {}
+    if not freshness:
+        return availability
+    if not freshness.get("is_current"):
+        return {
+            **availability,
+            "can_run": False,
+            "status": freshness.get("state") or "stale_data",
+            "reason": freshness.get("message") or "当前没有可用的本周数据。",
+            "data_freshness": freshness,
+        }
+    return {**availability, "data_freshness": freshness}
+
+
+
+def action_unavailable_reason(action: str) -> str:
+    availability = action_availability(action)
+    if availability.get("can_run", True):
+        return ""
+    return str(availability.get("reason") or "当前不在该操作的执行窗口。")
 
 
 def action_requires_confirmation(action: str, message: str = "") -> str:

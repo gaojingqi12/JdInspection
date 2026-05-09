@@ -181,7 +181,7 @@ class DailyInspectionRenderer:
             repair_summary = repair.get("summary") or {}
             needed_count = self._numeric_metric_value(repair_summary.get(count_label)) if count_label else None
             if needed_count is None:
-                needed_count = self._numeric_metric_value((repair.get("trigger") or {}).get("value")) or 0
+                needed_count = 0
             if not needed_count:
                 continue
 

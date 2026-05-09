@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 URL = "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%2523c2a7e96635b0d71839c8bdfaaacb4b9f"
@@ -221,7 +222,13 @@ def main():
 
             scope = get_chart_scope(page)
 
-            result = {}
+            result = {
+                "_meta": {
+                    "inspection_date": date.today().isoformat(),
+                    "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "schedule": "每周五",
+                }
+            }
 
             for metric_name, candidate_titles in metric_groups.items():
                 print(f"[INFO] 开始提取指标: {metric_name}")

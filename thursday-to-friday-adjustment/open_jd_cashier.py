@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import json
 import platform
 from pathlib import Path
@@ -126,6 +126,7 @@ def empty_modified_payload() -> dict[str, object]:
     return {
         "source_date": get_this_thursday().isoformat(),
         "target_date": get_this_friday().isoformat(),
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "count": 0,
         "modified_items": [],
         "failed_items": [],
