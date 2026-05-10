@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 
-TERMINAL_FAILURES = {"failed", "timeout"}
+TERMINAL_FAILURES = {"failed", "partial", "timeout"}
+STEP_FAILURES = {"failed", "timeout"}
 REPAIR_FAILURE_STATUSES = {"执行失败", "存在失败项", "需人工复核", "JSON异常", "无当天JSON"}
 REPAIR_RELEVANT_ACTIONS = {
     "daily_inspection",
@@ -25,18 +26,20 @@ def render_failure_recovery(job: dict[str, Any] | None, summary: dict[str, Any])
 
     job = job or {}
     title = job.get("title") or job.get("action") or "巡检任务"
-    failed = failed_step(job) if is_failed_job(job) else None
+    failed_steps = failed_step_list(job) if is_failed_job(job) else []
+    failed = failed_steps[0] if failed_steps else None
     completed = [item for item in job.get("step_results", []) if item.get("status") == "success"]
-    pending = [item for item in job.get("step_results", []) if item.get("status") in {"queued", "skipped"}]
+    pending = [item for item in job.get("step_results", []) if item.get("status") in {"queued", "skipped", "failed", "timeout"}]
     repair_lines = repair_detail_lines(summary)
     unhandled_lines = unhandled_requirement_lines(summary)
-    detail = failure_detail(failed, job, repair_failures)
+    detail = failure_detail(failed_steps, job, repair_failures)
+    heading = f"⚠️ {title}部分完成" if job.get("status") == "partial" else f"⚠️ {title}失败恢复"
 
     lines = [
-        f"⚠️ {title}失败恢复",
+        heading,
         "",
         "失败位置：",
-        *failure_position_lines(failed, job, repair_failures),
+        *failure_position_lines(failed_steps, job, repair_failures),
         "",
         "已完成：",
     ]
@@ -87,12 +90,12 @@ def is_repair_relevant_job(job: dict[str, Any] | None) -> bool:
 
 
 def failure_position_lines(
-    step: dict[str, Any] | None,
+    steps: list[dict[str, Any]],
     job: dict[str, Any],
     repair_failures: list[dict[str, Any]],
 ) -> list[str]:
-    if step:
-        return [f"- {format_step(step)}"]
+    if steps:
+        return [f"- {format_step(step)}" for step in steps]
     if is_failed_job(job):
         return [f"- {job.get('error') or '未定位到具体步骤'}"]
     if repair_failures:
@@ -106,22 +109,34 @@ def failure_position_lines(
 
 def completed_lines(completed: list[dict[str, Any]], job: dict[str, Any], repair_failures: list[dict[str, Any]]) -> list[str]:
     if completed:
-        return [f"- {item.get('label')}" for item in completed]
+        return [f"- {format_completed_step(item)}" for item in completed]
     if job.get("status") == "success" and repair_failures:
         return ["- 巡检脚本已执行完成", "- 汇总报告已生成，但修复结果需要人工复核"]
     return ["- 暂无已完成步骤"]
 
 
 def failed_step(job: dict[str, Any]) -> dict[str, Any] | None:
+    steps = failed_step_list(job)
+    return steps[0] if steps else None
+
+
+def failed_step_list(job: dict[str, Any]) -> list[dict[str, Any]]:
+    steps = [
+        item
+        for item in job.get("step_results", [])
+        if item.get("status") in STEP_FAILURES
+    ]
+    if steps:
+        return steps
     for item in job.get("step_results", []):
         if item.get("status") in TERMINAL_FAILURES:
-            return item
+            return [item]
     index = job.get("failed_step")
     if isinstance(index, int):
         for item in job.get("step_results", []):
             if item.get("index") == index:
-                return item
-    return None
+                return [item]
+    return []
 
 
 def format_step(step: dict[str, Any] | None) -> str:
@@ -130,22 +145,37 @@ def format_step(step: dict[str, Any] | None) -> str:
     index = step.get("index") or "-"
     label = step.get("label") or "-"
     status = step.get("status") or "-"
-    return f"步骤 {index}：{label}（{status}）"
+    attempts = step.get("attempts")
+    retry_limit = step.get("retry_limit")
+    retry_text = ""
+    if isinstance(attempts, int) and isinstance(retry_limit, int) and retry_limit:
+        retry_text = f"，已尝试 {attempts} 次"
+    return f"步骤 {index}：{label}（{status}{retry_text}）"
 
 
-def failure_detail(step: dict[str, Any] | None, job: dict[str, Any], repair_failures: list[dict[str, Any]]) -> list[str]:
+def format_completed_step(step: dict[str, Any]) -> str:
+    label = step.get("label") or "-"
+    attempts = step.get("attempts")
+    if isinstance(attempts, int) and attempts > 1:
+        return f"{label}（重试后成功，第 {attempts} 次）"
+    return str(label)
+
+
+def failure_detail(steps: list[dict[str, Any]], job: dict[str, Any], repair_failures: list[dict[str, Any]]) -> list[str]:
     lines = []
-    if step:
+    for step in steps:
+        label = step.get("label") or "失败步骤"
+        lines.append(f"- {label}：")
         if step.get("returncode") is not None:
-            lines.append(f"- returncode：{step.get('returncode')}")
+            lines.append(f"  returncode：{step.get('returncode')}")
         if step.get("error"):
-            lines.append(f"- 错误：{step.get('error')}")
+            lines.append(f"  错误：{step.get('error')}")
         stderr = tail_line(step.get("stderr_tail"))
         stdout = tail_line(step.get("stdout_tail"))
         if stderr:
-            lines.append(f"- stderr：{stderr}")
+            lines.append(f"  stderr：{stderr}")
         elif stdout:
-            lines.append(f"- stdout：{stdout}")
+            lines.append(f"  stdout：{stdout}")
     if not lines and job.get("error"):
         lines.append(f"- 错误：{job.get('error')}")
     for repair in repair_failures:
@@ -282,7 +312,10 @@ def repair_type_label(repair_type: str) -> str:
 def next_steps(job: dict[str, Any], step: dict[str, Any] | None, repair_lines: list[str]) -> list[str]:
     label = (step or {}).get("label") or ""
     suggestions = []
-    if "修复" in label:
+    if job.get("status") == "partial":
+        suggestions.append("- 失败项已自动重试，其他巡检步骤已继续执行。")
+        suggestions.append("- 优先处理失败项；处理后可单独重跑该巡检项，再刷新总报告。")
+    elif "修复" in label:
         suggestions.append("- 优先打开失败步骤日志，确认是否是页面加载、权限、元素定位或数据为空导致。")
         suggestions.append("- 若已拿到负责人/链接，先按上方明细人工复核；未拿到则重新运行对应修复脚本。")
     elif "生成日常巡检报告" in label:

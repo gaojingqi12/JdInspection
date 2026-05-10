@@ -36,6 +36,13 @@ const metricPreviewAssets = {
   biweekly_delivery_rate: "/static/assets/bi_weekly_delivery_rate.png",
 };
 
+function withAssetVersion(src) {
+  const version = state.summary?.asset_version || state.summary?.loaded_at || "";
+  if (!src || !version) return src || "";
+  const separator = src.includes("?") ? "&" : "?";
+  return `${src}${separator}v=${encodeURIComponent(version)}`;
+}
+
 const actionGroupOrder = ["主流程", "单项巡检", "报告", "日期调整", "修复", "其他"];
 
 const actionGroupLabels = {
@@ -187,6 +194,7 @@ async function syncPublicSite() {
       throw new Error("public site sync failed");
     }
     const payload = await res.json();
+    await loadSummary();
     button.textContent = "已同步";
     appendMessage("assistant", `静态展示页已同步：${payload.file || "根目录 index.html"}。`);
     window.setTimeout(() => {
@@ -212,7 +220,19 @@ async function loadActions() {
 }
 
 function statusClass(status) {
-  return ["success", "partial", "failed", "missing"].includes(status) ? status : "";
+  return ["success", "partial", "failed", "timeout", "missing"].includes(status) ? status : "";
+}
+
+function statusLabel(status) {
+  return {
+    success: "成功",
+    partial: "部分完成",
+    failed: "失败",
+    timeout: "超时",
+    running: "执行中",
+    queued: "排队中",
+    skipped: "跳过",
+  }[status] || status || "-";
 }
 
 function actionLabel(action) {
@@ -227,31 +247,35 @@ function renderHeader(summary) {
 
 function renderOverview(summary) {
   const cards = summary.overview || [];
-  $("overview").innerHTML = cards.map((card) => `
-    <article class="metric-card metric-${escapeHtml(card.indicator_type || "default")}${metricPreviewAssets[card.key] ? " has-preview" : ""}">
-      <div class="metric-topline">
-        <span class="metric-caption">${escapeHtml(card.caption || "指标")}</span>
-      </div>
-      <div class="metric-label">${escapeHtml(card.label)}</div>
-      <div class="metric-value">${escapeHtml(card.display_value)}${card.unit && card.unit !== "%" && card.key !== "ai_non_deep_users" ? `<span class="muted"> ${escapeHtml(displayUnit(card.unit))}</span>` : ""}</div>
-      <div class="metric-foot">
-        <span>${escapeHtml(card.date || "-")}</span>
-        <span>${escapeHtml(card.title || "")}</span>
-      </div>
-      ${metricPreviewAssets[card.key] ? `
-        <div class="metric-preview">
-          <div class="metric-preview-label">巡检截图</div>
-          <img
-            src="${escapeHtml(metricPreviewAssets[card.key])}"
-            alt="${escapeHtml(card.label)}巡检截图"
-            loading="lazy"
-            data-preview-full="${escapeHtml(metricPreviewAssets[card.key])}"
-            data-preview-title="${escapeHtml(card.label)}"
-          />
+  $("overview").innerHTML = cards.map((card) => {
+    const previewAsset = metricPreviewAssets[card.key] || "";
+    const previewSrc = withAssetVersion(previewAsset);
+    return `
+      <article class="metric-card metric-${escapeHtml(card.indicator_type || "default")}${previewSrc ? " has-preview" : ""}">
+        <div class="metric-topline">
+          <span class="metric-caption">${escapeHtml(card.caption || "指标")}</span>
         </div>
-      ` : ""}
-    </article>
-  `).join("");
+        <div class="metric-label">${escapeHtml(card.label)}</div>
+        <div class="metric-value">${escapeHtml(card.display_value)}${card.unit && card.unit !== "%" && card.key !== "ai_non_deep_users" ? `<span class="muted"> ${escapeHtml(displayUnit(card.unit))}</span>` : ""}</div>
+        <div class="metric-foot">
+          <span>${escapeHtml(card.date || "-")}</span>
+          <span>${escapeHtml(card.title || "")}</span>
+        </div>
+        ${previewSrc ? `
+          <div class="metric-preview">
+            <div class="metric-preview-label">巡检截图</div>
+            <img
+              src="${escapeHtml(previewSrc)}"
+              alt="${escapeHtml(card.label)}巡检截图"
+              loading="lazy"
+              data-preview-full="${escapeHtml(previewSrc)}"
+              data-preview-title="${escapeHtml(card.label)}"
+            />
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }).join("");
   $("overview").querySelectorAll(".metric-preview img[data-preview-full]").forEach((image) => {
     image.addEventListener("click", () => {
       openImagePreview({
@@ -428,7 +452,9 @@ function buildChartOptions(summary) {
 }
 
 function renderTrendGrid(summary) {
-  state.chartOptions = buildChartOptions(summary);
+  state.chartOptions = Array.isArray(summary.chart_options) && summary.chart_options.length
+    ? summary.chart_options
+    : buildChartOptions(summary);
   if (state.expandedChart && !state.chartOptions.some((item) => item.id === state.expandedChart)) {
     state.expandedChart = "";
   }
@@ -772,6 +798,22 @@ async function loadAgentTrace() {
   renderAgentTrace(state.auditEvents);
 }
 
+async function clearAgentTrace() {
+  const ok = await openConfirmModal({
+    title: "清空 Agent 轨迹",
+    description: "清空后将移除当前工具调用、确认门和执行审计记录。",
+    confirmText: "确认清空",
+  });
+  if (!ok) return;
+  const res = await fetch("/api/tools/audit/clear", { method: "POST" });
+  if (!res.ok) {
+    appendMessage("assistant", "清空 Agent 轨迹失败，请稍后重试。");
+    return;
+  }
+  state.auditEvents = [];
+  renderAgentTrace([]);
+}
+
 async function clearJobs() {
   const res = await fetch("/api/jobs/clear", { method: "POST" });
   if (!res.ok) return;
@@ -871,7 +913,7 @@ function renderJobs(jobs) {
         <article class="job-card">
           <div class="job-title">
             <span>${escapeHtml(job.title || job.action)}</span>
-            <span class="${statusClass(job.status)}">${escapeHtml(job.status || "-")}</span>
+            <span class="${statusClass(job.status)}">${escapeHtml(statusLabel(job.status))}</span>
           </div>
           <div class="job-meta">步骤 ${escapeHtml(job.current_step ?? 0)} / ${escapeHtml(job.total_steps ?? 0)} · ${escapeHtml(job.updated_at || job.created_at || "-")}</div>
           ${logs ? `<pre class="job-log">${escapeHtml(logs)}</pre>` : ""}
@@ -883,6 +925,7 @@ function renderJobs(jobs) {
 
 function toolEventTone(eventName = "", jobStatus = "") {
   if (eventName.includes("confirmation_required")) return "blocked";
+  if (jobStatus === "partial") return "blocked";
   if (eventName.includes("rejected") || jobStatus === "failed" || jobStatus === "timeout") return "failed";
   if (eventName.includes("finished") || jobStatus === "success") return "success";
   return "running";
@@ -896,6 +939,7 @@ function toolEventLabel(event = {}) {
   if (eventName.includes("confirmation_required")) return "确认门";
   if (eventName.includes("rejected")) return "已拒绝";
   if (eventName.includes("queued")) return "已入队";
+  if (eventName.includes("finished") && status === "partial") return "部分完成";
   if (eventName.includes("finished")) return status === "success" ? "已完成" : status || "已结束";
   return eventName || "事件";
 }
@@ -1127,6 +1171,7 @@ $("modelSelect").addEventListener("change", async () => {
 });
 $("refreshJobsBtn").addEventListener("click", loadJobs);
 $("refreshAgentTraceBtn").addEventListener("click", loadAgentTrace);
+$("clearAgentTraceBtn").addEventListener("click", clearAgentTrace);
 $("clearJobsBtn").addEventListener("click", clearJobs);
 $("clearChatBtn").addEventListener("click", async () => {
   await clearChat();

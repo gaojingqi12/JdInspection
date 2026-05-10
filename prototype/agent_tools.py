@@ -298,7 +298,7 @@ def evaluate_agent_state(
         if isinstance(item, dict)
     }
     job_status = (job or {}).get("status")
-    job_failed = job_status in {"failed", "timeout"}
+    job_failed = job_status in {"failed", "partial", "timeout"}
 
     repair_types = []
     if "延期提测需求数" in abnormal_names:

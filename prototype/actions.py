@@ -110,8 +110,20 @@ def tail_text(value: str, max_chars: int = 3000) -> str:
     return value[-max_chars:].strip()
 
 
-def step(command: list[str], cwd: Path, label: str) -> dict:
-    return {"command": command, "cwd": cwd, "label": label}
+def step(
+    command: list[str],
+    cwd: Path,
+    label: str,
+    retry_limit: int = 0,
+    continue_on_failure: bool = False,
+) -> dict:
+    return {
+        "command": command,
+        "cwd": cwd,
+        "label": label,
+        "retry_limit": retry_limit,
+        "continue_on_failure": continue_on_failure,
+    }
 
 
 def read_json_file(path: Path) -> dict:
@@ -142,13 +154,14 @@ def daily_inspection_steps(skip_repair: bool = True) -> list[dict]:
     aggregate = [py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py"]
     if skip_repair:
         aggregate.append("--skip-repair")
+    inspection_retry_limit = 2
     return [
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检"),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检"),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检"),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检"),
-        step([py, "scripts/run_skill.py"], root / "AI-inspection", "AI 深度用户巡检"),
-        step([py, "scripts/run_skill.py"], root / "ContinuousDelivery-inspection", "持续交付巡检"),
+        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检", inspection_retry_limit, True),
+        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检", inspection_retry_limit, True),
+        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检", inspection_retry_limit, True),
+        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检", inspection_retry_limit, True),
+        step([py, "scripts/run_skill.py"], root / "AI-inspection", "AI 深度用户巡检", inspection_retry_limit, True),
+        step([py, "scripts/run_skill.py"], root / "ContinuousDelivery-inspection", "持续交付巡检", inspection_retry_limit, True),
         step(aggregate, root, "生成日常巡检报告"),
     ]
 
@@ -437,6 +450,54 @@ def update_step_result(job_id: str, index: int, **updates) -> None:
         job["updated_at"] = now_text()
 
 
+def failed_step_results(job: dict) -> list[dict]:
+    return [
+        item
+        for item in job.get("step_results", [])
+        if item.get("status") in {"failed", "timeout"}
+    ]
+
+
+def mark_skipped_steps(job_id: str, start_index: int, total_steps: int) -> None:
+    for skipped_index in range(start_index, total_steps + 1):
+        update_step_result(job_id, skipped_index, status="skipped")
+
+
+def run_step_with_retry(job_id: str, index: int, total_steps: int, item: dict) -> dict:
+    retry_limit = max(0, int(item.get("retry_limit") or 0))
+    attempts_allowed = retry_limit + 1
+    last_result: dict = {}
+    for attempt in range(1, attempts_allowed + 1):
+        update_step_result(
+            job_id,
+            index,
+            status="running",
+            attempts=attempt,
+            retry_limit=retry_limit,
+            started_at=now_text(),
+            returncode=None,
+            error="",
+            stdout_tail="",
+            stderr_tail="",
+        )
+        if attempt == 1:
+            append_job_log(job_id, f"步骤 {index}/{total_steps}：{item['label']}")
+        else:
+            append_job_log(job_id, f"步骤 {index}/{total_steps} 重试 {attempt - 1}/{retry_limit}：{item['label']}")
+
+        result = run_command(job_id, item["command"], item["cwd"])
+        last_result = {**result, "attempts": attempt, "retry_limit": retry_limit}
+        update_step_result(job_id, index, **last_result)
+        if result.get("status") == "success":
+            if attempt > 1:
+                append_job_log(job_id, f"步骤 {index} 重试后成功，继续后续巡检。")
+            return last_result
+        if attempt <= retry_limit:
+            append_job_log(job_id, f"步骤 {index} 失败，准备自动重试。")
+
+    return last_result
+
+
 def run_job(job_id: str) -> None:
     with JOB_LOCK:
         job = JOBS[job_id]
@@ -446,13 +507,12 @@ def run_job(job_id: str) -> None:
     try:
         for index, item in enumerate(steps, 1):
             set_job(job_id, current_step=index, total_steps=len(steps))
-            append_job_log(job_id, f"步骤 {index}/{len(steps)}：{item['label']}")
-            update_step_result(job_id, index, status="running", started_at=now_text())
-            result = run_command(job_id, item["command"], item["cwd"])
-            update_step_result(job_id, index, **result)
+            result = run_step_with_retry(job_id, index, len(steps), item)
             if result.get("status") != "success":
-                for skipped_index in range(index + 1, len(steps) + 1):
-                    update_step_result(job_id, skipped_index, status="skipped")
+                if item.get("continue_on_failure"):
+                    append_job_log(job_id, f"步骤 {index} 仍失败，已记录失败并继续后续巡检。")
+                    continue
+                mark_skipped_steps(job_id, index + 1, len(steps))
                 set_job(
                     job_id,
                     status=result.get("status") or "failed",
@@ -464,6 +524,33 @@ def run_job(job_id: str) -> None:
                 )
                 append_job_log(job_id, "任务失败，已停止后续步骤。")
                 return
+        with JOB_LOCK:
+            current_job = dict(JOBS.get(job_id) or {})
+        failed_steps = failed_step_results(current_job)
+        if failed_steps:
+            first_failed = failed_steps[0]
+            set_job(
+                job_id,
+                status="partial",
+                finished_at=now_text(),
+                returncode=1,
+                failed_step=first_failed.get("index"),
+                failed_step_label=first_failed.get("label"),
+                failed_steps=[
+                    {
+                        "index": item.get("index"),
+                        "label": item.get("label"),
+                        "status": item.get("status"),
+                        "attempts": item.get("attempts"),
+                        "retry_limit": item.get("retry_limit"),
+                        "error": item.get("error"),
+                    }
+                    for item in failed_steps
+                ],
+                error=f"{len(failed_steps)} 个巡检步骤失败，其余步骤已继续执行。",
+            )
+            append_job_log(job_id, f"任务部分完成：{len(failed_steps)} 个步骤失败，其余步骤已执行。")
+            return
         set_job(job_id, status="success", finished_at=now_text(), returncode=0)
         append_job_log(job_id, "任务完成。")
     except subprocess.TimeoutExpired as exc:
@@ -484,6 +571,8 @@ def start_job(action: str) -> dict:
             "command": " ".join(item["command"]),
             "cwd": str(item["cwd"]),
             "status": "queued",
+            "retry_limit": item.get("retry_limit", 0),
+            "continue_on_failure": bool(item.get("continue_on_failure")),
         }
         for index, item in enumerate(steps, 1)
     ]
@@ -507,7 +596,7 @@ def start_job(action: str) -> dict:
 
 def wait_for_job(job_id: str, timeout_seconds: int = 60 * 60) -> dict:
     deadline = time.time() + timeout_seconds
-    terminal_statuses = {"success", "failed", "timeout"}
+    terminal_statuses = {"success", "partial", "failed", "timeout"}
     while time.time() < deadline:
         with JOB_LOCK:
             job = dict(JOBS.get(job_id) or {})

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import shutil
 import threading
 import uuid
 from datetime import datetime
@@ -41,8 +42,8 @@ from agent_tools import (
 from daily_templates import DailyInspectionRenderer
 from failure_recovery import render_failure_recovery
 from inspection_agent import InspectionAgent, InspectionAgentDeps
-from schedule_policy import fixed_cycle_data_freshness, file_modified_date, parse_date
-from tool_audit import recent_tool_events, record_tool_event
+from schedule_policy import fixed_cycle_data_freshness, file_modified_date, parse_date, week_end, week_start
+from tool_audit import clear_tool_events, recent_tool_events, record_tool_event
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -55,6 +56,8 @@ THURSDAY_DEMANDS_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thurs
 THURSDAY_SUBMIT_TEST_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_submit_test_demands.json"
 THURSDAY_ONLINE_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_online_demands.json"
 WEEKLY_METRICS_PATH = ROOT_DIR / "friday-inspection-skill" / "scripts" / "out" / "ine_metrics.json"
+AI_INSPECTION_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "AI-inspection" / "out"
+CONTINUOUS_DELIVERY_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "ContinuousDelivery-inspection" / "out"
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
 DEFAULT_API_KEY = ""
@@ -111,6 +114,11 @@ REPAIR_METRIC_CONFIG = {
         "caption": "修复筛选",
         "indicator_type": "delay_online_rate",
     },
+}
+
+REPAIR_HISTORY_DIRS = {
+    "delayed_test": ROOT_DIR / "daily-inspection-skill" / "reschedule-delayed-test " / "history",
+    "delayed_online": ROOT_DIR / "daily-inspection-skill" / "repair-delayed-launch" / "history",
 }
 
 
@@ -305,6 +313,41 @@ STATIC_FRONTEND_STYLESHEET_PATH = "./prototype/static/styles.css"
 STATIC_ROOT_REPORT_STYLE = REPORT_STYLE.replace('/static/assets/jd-inspection-page-background.png', STATIC_ROOT_ASSET_PATH)
 STATIC_TREND_ILLUSTRATION_PATH = "./prototype/static/assets/jd-static-trend-banner.png"
 STATIC_HERO_BRAND_PATH = "./prototype/static/assets/jd-static-showcase-hero-brand.png"
+
+PREVIEW_ASSET_CONFIG = {
+    "delay_test_rate_okr": {
+        "asset_name": "delay_test_rate.png",
+        "sources": [
+            ROOT_DIR / "daily-inspection-skill" / "assets" / "screenshots" / "delay_test_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "assets" / "screenshots" / "delay_test_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "OKR-inspection" / "delay-test-rate-skill" / "out" / "05_after_query.png",
+        ],
+    },
+    "delay_online_rate": {
+        "asset_name": "delay_online_rate.png",
+        "sources": [
+            ROOT_DIR / "daily-inspection-skill" / "assets" / "screenshots" / "delay_online_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "assets" / "screenshots" / "delay_online_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "OKR-inspection" / "delay-online-rate-skill" / "out" / "05_after_query.png",
+        ],
+    },
+    "technical_refactor_working_hours_rate": {
+        "asset_name": "technical_refactor_working_hours.png",
+        "sources": [
+            ROOT_DIR / "daily-inspection-skill" / "assets" / "screenshots" / "technical_refactor_working_hours.png",
+            ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "assets" / "screenshots" / "technical_refactor_working_hours.png",
+            ROOT_DIR / "daily-inspection-skill" / "OKR-inspection" / "technical-refactor-working-hours-skill" / "out" / "05_after_query.png",
+        ],
+    },
+    "biweekly_delivery_rate": {
+        "asset_name": "bi_weekly_delivery_rate.png",
+        "sources": [
+            ROOT_DIR / "daily-inspection-skill" / "assets" / "screenshots" / "bi_weekly_delivery_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "assets" / "screenshots" / "bi_weekly_delivery_rate.png",
+            ROOT_DIR / "daily-inspection-skill" / "OKR-inspection" / "bi-weekly-delivery-rate-skill" / "out" / "03_after_query.png",
+        ],
+    },
+}
 STATIC_HOME_OVERRIDE_STYLE = f"""
     body {{
       background-image:
@@ -1438,14 +1481,89 @@ def add_metric_count_classes(content: str) -> str:
     return "".join(result)
 
 
+def relative_path_text(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT_DIR))
+    except ValueError:
+        return str(path)
+
+
+def latest_existing_file(paths: list[Path]) -> Path | None:
+    candidates = [path for path in paths if path.exists() and path.is_file()]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def preview_asset_target(asset_name: str) -> Path:
+    return STATIC_DIR / "assets" / asset_name
+
+
+def metric_preview_asset_version() -> str:
+    mtimes = []
+    for config in PREVIEW_ASSET_CONFIG.values():
+        target = preview_asset_target(str(config.get("asset_name") or ""))
+        if target.exists():
+            mtimes.append(int(target.stat().st_mtime))
+    return str(max(mtimes)) if mtimes else ""
+
+
+def versioned_preview_asset(path_text: str) -> str:
+    rel_path = path_text.removeprefix("./")
+    path = ROOT_DIR / rel_path
+    if not path.exists():
+        return path_text
+    separator = "&" if "?" in path_text else "?"
+    return f"{path_text}{separator}v={int(path.stat().st_mtime)}"
+
+
 def metric_preview_asset(key: str) -> str | None:
-    mapping = {
-        "delay_test_rate_okr": "./prototype/static/assets/delay_test_rate.png",
-        "delay_online_rate": "./prototype/static/assets/delay_online_rate.png",
-        "technical_refactor_working_hours_rate": "./prototype/static/assets/technical_refactor_working_hours.png",
-        "biweekly_delivery_rate": "./prototype/static/assets/bi_weekly_delivery_rate.png",
-    }
-    return mapping.get(key)
+    config = PREVIEW_ASSET_CONFIG.get(key)
+    if not config:
+        return None
+    asset_name = str(config.get("asset_name") or "")
+    if not asset_name:
+        return None
+    return versioned_preview_asset(f"./prototype/static/assets/{asset_name}")
+
+
+def sync_metric_preview_assets() -> list[dict]:
+    synced = []
+    (STATIC_DIR / "assets").mkdir(parents=True, exist_ok=True)
+    for key, config in PREVIEW_ASSET_CONFIG.items():
+        asset_name = str(config.get("asset_name") or "")
+        target = preview_asset_target(asset_name)
+        source = latest_existing_file(list(config.get("sources") or []))
+        if not source:
+            synced.append(
+                {
+                    "key": key,
+                    "target": relative_path_text(target),
+                    "status": "missing_source",
+                }
+            )
+            continue
+
+        source_stat = source.stat()
+        target_stat = target.stat() if target.exists() else None
+        should_copy = (
+            target_stat is None
+            or int(target_stat.st_mtime) < int(source_stat.st_mtime)
+            or target_stat.st_size != source_stat.st_size
+        )
+        if should_copy:
+            shutil.copy2(source, target)
+        final_stat = target.stat()
+        synced.append(
+            {
+                "key": key,
+                "source": relative_path_text(source),
+                "target": relative_path_text(target),
+                "updated": should_copy,
+                "version": int(final_stat.st_mtime),
+            }
+        )
+    return synced
 
 
 def table_section(title: str, note: str, headers: list[str], rows: list[list[str]], empty_text: str = "暂无记录") -> str:
@@ -2371,6 +2489,8 @@ def compact_summary(summary: dict) -> dict:
     payload["overview"] = build_overview(summary)
     payload["freshness"] = data_freshness()
     payload["loaded_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    payload["asset_version"] = metric_preview_asset_version()
+    payload["chart_options"] = build_chart_options(payload)
     payload["report_html_exists"] = REPORT_HTML_PATH.exists()
     return payload
 
@@ -2407,14 +2527,188 @@ def single_point_metric(metric_id: str, key: str, title: str, unit: str, date: s
     }
 
 
+def date_from_filename(path: Path) -> str:
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", path.name)
+    return match.group(1) if match else ""
+
+
+def chart_week_bounds(summary: dict):
+    anchor = parse_date(summary.get("inspection_date")) or datetime.now().date()
+    return week_start(anchor), week_end(anchor)
+
+
+def filter_points_to_current_week(points: list[dict], summary: dict) -> list[dict]:
+    start, end = chart_week_bounds(summary)
+    filtered = []
+    for point in points:
+        point_date = parse_date(point.get("date"))
+        if point_date and start <= point_date <= end:
+            filtered.append(point)
+    return filtered
+
+
+def filter_chart_option_to_current_week(option: dict | None, summary: dict) -> dict | None:
+    if not option:
+        return None
+    start, end = chart_week_bounds(summary)
+    return {
+        **option,
+        "points": filter_points_to_current_week(list(option.get("points") or []), summary),
+        "range": {
+            "type": "current_week",
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+        },
+    }
+
+
+def metric_series_option(metric_id: str, key: str, title: str, unit: str, points: list[dict], fallback_date: str, fallback_value) -> dict:
+    by_date: dict[str, dict] = {}
+    for point in points:
+        date = str(point.get("date") or "").strip()
+        value = point.get("value")
+        if not date or value is None or value == "":
+            continue
+        by_date[date] = {"date": date, "value": value, "unit": point.get("unit") or unit}
+    if fallback_date and fallback_date not in by_date and fallback_value is not None:
+        by_date[fallback_date] = {"date": fallback_date, "value": fallback_value, "unit": unit}
+    sorted_points = [by_date[key] for key in sorted(by_date)]
+    return {
+        "id": metric_id,
+        "key": key,
+        "title": title,
+        "unit": unit,
+        "points": sorted_points or [{"date": fallback_date or "-", "value": fallback_value, "unit": unit}],
+    }
+
+
+def ai_non_deep_user_points(summary: dict) -> list[dict]:
+    points: list[dict] = []
+    for path in sorted(AI_INSPECTION_OUT_DIR.glob("non_deep_users_*.json")):
+        data = read_json(path, None)
+        if isinstance(data, list):
+            value = len(data)
+            date_value = date_from_filename(path)
+        elif isinstance(data, dict):
+            users = data.get("users")
+            value = data.get("count")
+            if value is None and isinstance(users, list):
+                value = len(users)
+            date_value = str(data.get("date") or date_from_filename(path))
+        else:
+            continue
+        points.append({"date": date_value, "value": value, "unit": "count"})
+
+    ai = summary.get("ai_inspection") or {}
+    current_value = ai.get("count")
+    if current_value is None and isinstance(ai.get("users"), list):
+        current_value = len(ai.get("users") or [])
+    points.append({"date": ai.get("date") or summary.get("inspection_date"), "value": current_value, "unit": "count"})
+    return points
+
+
+def continuous_delivery_points(summary: dict, key: str) -> list[dict]:
+    points: list[dict] = []
+    paths = [
+        *sorted((CONTINUOUS_DELIVERY_OUT_DIR / "history").glob("*.json")),
+        *sorted(CONTINUOUS_DELIVERY_OUT_DIR.glob("continuous_delivery_*.json")),
+    ]
+    for path in paths:
+        data = read_json(path, {})
+        if not isinstance(data, dict):
+            continue
+        metrics = data.get("metrics") if isinstance(data.get("metrics"), dict) else {}
+        value = metrics.get(key)
+        if value is None:
+            continue
+        points.append(
+            {
+                "date": data.get("date") or date_from_filename(path),
+                "value": parse_numberish(value),
+                "unit": ((data.get("unit") or {}) if isinstance(data.get("unit"), dict) else {}).get(key) or "%",
+            }
+        )
+
+    delivery = summary.get("continuous_delivery") or {}
+    metrics = delivery.get("metrics") if isinstance(delivery.get("metrics"), dict) else {}
+    points.append(
+        {
+            "date": delivery.get("date") or summary.get("inspection_date"),
+            "value": parse_numberish(metrics.get(key)),
+            "unit": ((delivery.get("unit") or {}) if isinstance(delivery.get("unit"), dict) else {}).get(key) or "%",
+        }
+    )
+    return points
+
+
+def history_metric_points(summary: dict, indicator_type: str, key: str) -> list[dict]:
+    for indicator in summary.get("indicators", []):
+        if indicator.get("indicator_type") != indicator_type:
+            continue
+        points = (indicator.get("history") or {}).get(key)
+        if isinstance(points, list):
+            return [point for point in points if isinstance(point, dict)]
+    return []
+
+
+def repair_history_count_map(repair_type: str) -> dict[str, int]:
+    history_dir = REPAIR_HISTORY_DIRS.get(repair_type)
+    if not history_dir or not history_dir.exists():
+        return {}
+    counts: dict[str, int] = {}
+    for path in sorted(history_dir.glob("*.json")):
+        date_value = date_from_filename(path) or path.stem
+        data = read_json(path, {})
+        if not isinstance(data, dict):
+            continue
+        results = data.get("results")
+        counts[date_value] = len(results) if isinstance(results, list) else 0
+    return counts
+
+
 def repair_trend_option(summary: dict, repair_type: str, indicator_type: str, key: str) -> dict:
     repair_metric = (summary.get("repair_metrics") or {}).get(repair_type, {})
     focus = next((item for item in summary.get("focus_series", []) or [] if item.get("indicator_type") == indicator_type), {})
     focus_metric = next((item for item in focus.get("metrics", []) or [] if item.get("key") == key), {})
-    points = list(focus_metric.get("points") or [])
+    repair_counts = repair_history_count_map(repair_type)
+    for point in focus_metric.get("points") or []:
+        date_value = str(point.get("date") or "").strip()
+        value = parse_numberish(point.get("value"))
+        if date_value and isinstance(value, (int, float)):
+            repair_counts[date_value] = int(value)
+
     repair_date = repair_metric.get("date") or summary.get("inspection_date")
-    if repair_date and not any(point.get("date") == repair_date for point in points):
-        points.append({"date": repair_date, "value": repair_metric.get("value", 0), "unit": "count"})
+    current_value = parse_numberish(repair_metric.get("value"))
+    if repair_date and isinstance(current_value, (int, float)):
+        repair_counts[str(repair_date)] = int(current_value)
+
+    points: list[dict] = []
+    for point in history_metric_points(summary, indicator_type, key):
+        date_value = str(point.get("date") or "").strip()
+        raw_value = parse_numberish(point.get("value"))
+        if not date_value or not isinstance(raw_value, (int, float)):
+            continue
+        if raw_value <= 0:
+            value = 0
+        else:
+            value = repair_counts.get(date_value)
+            if value is None:
+                value = raw_value
+        points.append(
+            {
+                "date": date_value,
+                "value": value,
+                "unit": "count",
+                "source": "repair_history" if date_value in repair_counts else "okr_trigger",
+            }
+        )
+
+    seen_dates = {point.get("date") for point in points}
+    for date_value, value in repair_counts.items():
+        if date_value not in seen_dates:
+            points.append({"date": date_value, "value": value, "unit": "count", "source": "repair_history"})
+    points = sorted(points, key=lambda point: str(point.get("date") or ""))
+
     return {
         "id": f"{indicator_type}:{key}",
         "key": key,
@@ -2435,26 +2729,34 @@ def build_chart_options(summary: dict) -> list[dict]:
     ai = summary.get("ai_inspection") or {}
     delivery = summary.get("continuous_delivery") or {}
     chart_options.append(
-        single_point_metric(
+        metric_series_option(
             "ai_inspection:ai_non_deep_users",
             "ai_non_deep_users",
             "AI 深度用户为否",
             "count",
+            ai_non_deep_user_points(summary),
             ai.get("date") or summary.get("inspection_date"),
             ai.get("count") or 0,
         )
     )
+    delivery_key = "continuous_delivery_team_space_online_requirement_rate"
     chart_options.append(
-        single_point_metric(
-            "continuous_delivery:continuous_delivery_team_space_online_requirement_rate",
-            "continuous_delivery_team_space_online_requirement_rate",
+        metric_series_option(
+            f"continuous_delivery:{delivery_key}",
+            delivery_key,
             "持续交付占比",
             "%",
+            continuous_delivery_points(summary, delivery_key),
             delivery.get("date") or summary.get("inspection_date"),
-            (delivery.get("metrics") or {}).get("continuous_delivery_team_space_online_requirement_rate", 0),
+            (delivery.get("metrics") or {}).get(delivery_key, 0),
         )
     )
-    return chart_options[:6]
+    weekly_options = [
+        option
+        for option in (filter_chart_option_to_current_week(option, summary) for option in chart_options)
+        if option
+    ]
+    return weekly_options[:6]
 
 
 def json_script_payload(payload) -> str:
@@ -2919,6 +3221,7 @@ def build_static_site_index_html() -> str:
 
 
 def sync_public_static_site() -> dict:
+    assets = sync_metric_preview_assets()
     files = {
         STATIC_ROOT_INDEX_PATH: build_static_site_index_html(),
         STATIC_ROOT_DAILY_REPORT_PATH: static_report_shell("日常巡检报告", "daily", extract_report_main_content(render_daily_report_html())),
@@ -2932,6 +3235,7 @@ def sync_public_static_site() -> dict:
         "ok": True,
         "file": str(STATIC_ROOT_INDEX_PATH),
         "files": [str(path) for path in files],
+        "assets": assets,
         "updated_at": now_text(),
     }
 
@@ -3148,6 +3452,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
         if path == "/":
             return self.serve_file(STATIC_DIR / "index.html")
         if path == "/api/summary":
+            sync_metric_preview_assets()
             summary = compact_summary(read_json(SUMMARY_PATH, {}))
             return self.write_json(summary)
         if path == "/api/actions":
@@ -3214,7 +3519,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in ("/api/chat", "/api/chat/stream", "/api/actions/run", "/api/tools/call", "/api/jobs/clear", "/api/chat/sessions", "/api/chat/sessions/clear-all", "/api/ai-config", "/api/ai-config/test", "/api/public-site/sync") and not (
+        if parsed.path not in ("/api/chat", "/api/chat/stream", "/api/actions/run", "/api/tools/call", "/api/tools/audit/clear", "/api/jobs/clear", "/api/chat/sessions", "/api/chat/sessions/clear-all", "/api/ai-config", "/api/ai-config/test", "/api/public-site/sync") and not (
             parsed.path.startswith("/api/chat/sessions/") and parsed.path.endswith("/clear")
         ):
             return self.send_error(404)
@@ -3230,6 +3535,10 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             with JOB_LOCK:
                 JOBS.clear()
             return self.write_json({"ok": True, "jobs": []})
+
+        if parsed.path == "/api/tools/audit/clear":
+            clear_tool_events()
+            return self.write_json({"ok": True, "events": []})
 
         if parsed.path == "/api/ai-config":
             with AI_CONFIG_LOCK:

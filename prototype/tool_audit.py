@@ -41,3 +41,9 @@ def recent_tool_events(limit: int = 100) -> list[dict[str, Any]]:
         if isinstance(item, dict):
             events.append(item)
     return events
+
+
+def clear_tool_events() -> None:
+    AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with AUDIT_LOCK:
+        AUDIT_PATH.write_text("", encoding="utf-8")

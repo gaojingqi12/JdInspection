@@ -431,7 +431,14 @@ def write_daily_json(payload: dict) -> str:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
         f.write("\n")
+    history_dir = os.path.join(OUT_DIR, "history")
+    os.makedirs(history_dir, exist_ok=True)
+    history_path = os.path.join(history_dir, f"{payload['date']}.json")
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.write("\n")
     log(f"已写入当日巡检 JSON: {path}")
+    log(f"已写入历史巡检 JSON: {history_path}")
     return path
 
 

@@ -714,6 +714,13 @@ input {
   box-shadow: none;
 }
 
+#clearAgentTraceBtn {
+  border-color: rgba(217, 225, 231, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--muted);
+  box-shadow: none;
+}
+
 #clearChatBtn {
   border-color: rgba(217, 225, 231, 0.95);
   background: rgba(255, 255, 255, 0.88);
@@ -1863,6 +1870,19 @@ textarea {
   gap: 10px;
   font-size: 14px;
   font-weight: 700;
+}
+
+.job-title .success {
+  color: var(--green);
+}
+
+.job-title .partial {
+  color: var(--amber);
+}
+
+.job-title .failed,
+.job-title .timeout {
+  color: var(--red);
 }
 
 .job-meta {
