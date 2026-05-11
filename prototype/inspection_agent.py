@@ -225,8 +225,7 @@ class InspectionAgent:
         if self.deps.is_inspection_related(message, action):
             return {}
         return {
-            "stop_reason": "out_of_scope",
-            "mode": "inspection-scope-guard",
+            "mode": "general-chat",
         }
 
     def _planner_node(self, state: AgentState) -> AgentState:

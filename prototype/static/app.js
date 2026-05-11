@@ -927,6 +927,8 @@ function toolEventTone(eventName = "", jobStatus = "") {
   if (eventName.includes("confirmation_required")) return "blocked";
   if (jobStatus === "partial") return "blocked";
   if (eventName.includes("rejected") || jobStatus === "failed" || jobStatus === "timeout") return "failed";
+  if (eventName === "data_query_completed") return "success";
+  if (eventName === "data_query_planner_failed") return "failed";
   if (eventName.includes("finished") || jobStatus === "success") return "success";
   return "running";
 }
@@ -936,6 +938,7 @@ function toolEventLabel(event = {}) {
   const status = event.job?.status || event.tool_result?.job?.status || event.tool_result?.status || "";
   if (eventName === "planner_completed") return "Planner";
   if (eventName === "evaluator_completed") return "Evaluator";
+  if (eventName.startsWith("data_query")) return "数据查询";
   if (eventName.includes("confirmation_required")) return "确认门";
   if (eventName.includes("rejected")) return "已拒绝";
   if (eventName.includes("queued")) return "已入队";
@@ -956,11 +959,13 @@ function renderAgentTrace(events) {
       const toolCall = event.tool_call || event.tool_result?.tool_call || {};
       const action = event.action || event.tool_result?.action || "";
       const job = event.job || event.tool_result?.job || {};
-      const source = toolCall.source || "-";
+      const source = event.source || toolCall.source || "-";
       const subject = event.event === "planner_completed"
         ? (event.plan?.plan_type || "规划完成")
         : event.event === "evaluator_completed"
           ? (event.evaluation?.status || "评估完成")
+          : event.event?.startsWith("data_query")
+            ? `${event.query || "本地数据"} · ${event.match_count ?? "-"} 条`
           : (toolCall.name || "-");
       const tone = toolEventTone(event.event, job.status || event.tool_result?.status || "");
       const payload = {
@@ -970,6 +975,10 @@ function renderAgentTrace(events) {
         plan: event.plan,
         evaluation: event.evaluation,
         required_phrase: event.required_phrase,
+        query: event.query,
+        match_count: event.match_count,
+        matches: event.matches,
+        error: event.error,
       };
       return `
         <article class="agent-trace-item ${escapeHtml(tone)}">

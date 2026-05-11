@@ -265,7 +265,7 @@ def action_registry() -> dict[str, dict]:
             "group": "报告",
             "description": "只读取已有 JSON 重新生成日常巡检 HTML，不触发修复。",
             "risk": "safe",
-            "aliases": ["刷新报告", "生成总报告", "重新生成报告"],
+            "aliases": ["刷新报告", "刷新总报告", "生成总报告", "重新生成报告"],
             "steps": [step([py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py", "--skip-repair"], d, "生成日常巡检报告")],
         },
         "friday_report_text": {
@@ -611,6 +611,124 @@ def wait_for_job(job_id: str, timeout_seconds: int = 60 * 60) -> dict:
         return dict(JOBS.get(job_id) or {})
 
 
+STRONG_ACTION_WORDS = (
+    "执行",
+    "运行",
+    "启动",
+    "开始",
+    "发起",
+    "重跑",
+    "重新跑",
+    "跑一下",
+    "跑一遍",
+    "刷新",
+    "重新生成",
+    "生成",
+    "同步",
+    "更新",
+    "修复",
+    "顺延",
+    "调整",
+    "抓取",
+    "拉取",
+    "确认",
+)
+
+DISCUSSION_WORDS = (
+    "为什么",
+    "为啥",
+    "怎么",
+    "如何",
+    "是什么",
+    "啥",
+    "说明",
+    "解释",
+    "讲一下",
+    "看一下",
+    "看下",
+    "看看",
+    "分析",
+    "优化",
+    "设计",
+    "架构",
+    "报告怎么写",
+    "能不能",
+    "可以吗",
+    "是否",
+    "是不是",
+    "会不会",
+    "吗",
+    "有几个",
+    "多少",
+    "状态",
+    "结果",
+    "数据",
+    "代码",
+    "逻辑",
+    "意思",
+    "?",
+    "？",
+)
+
+
+def _has_strong_action_intent(text: str) -> bool:
+    return any(word in text for word in STRONG_ACTION_WORDS)
+
+
+def _has_discussion_intent(text: str) -> bool:
+    return any(word in text for word in DISCUSSION_WORDS)
+
+
+def has_explicit_action_intent(message: str, action: str = "") -> bool:
+    text = (message or "").strip().lower()
+    if not text:
+        return False
+    if re.search(r"(?:执行|运行|启动)?\s*action:([a-z0-9_]+)", text):
+        return True
+    if re.search(r"(?:tool|工具)\s*:\s*([a-zA-Z0-9_]+)", text):
+        return True
+    if _has_discussion_intent(text) and not any(word in text for word in ("确认", "执行", "运行", "启动", "开始", "发起", "重跑", "重新跑", "跑一下", "跑一遍", "刷新", "重新生成")):
+        return False
+    if _has_strong_action_intent(text):
+        return True
+    if "巡检一下" in text or "帮我巡检" in text or "帮我日常巡检" in text or "帮我周度巡检" in text:
+        return True
+    if action.startswith("repair_") and "修复" in text:
+        return True
+    if action == "thursday_adjustment" and ("顺延" in text or "调整" in text):
+        return True
+    return False
+
+
+def _alias_can_trigger_action(text: str, alias: str, action: str) -> bool:
+    alias_text = alias.lower()
+    if alias_text not in text:
+        return False
+    if has_explicit_action_intent(text, action):
+        return True
+    if _has_discussion_intent(text):
+        return False
+    action_like_alias = (
+        "巡检" in alias_text
+        or "修复" in alias_text
+        or "刷新" in alias_text
+        or "生成" in alias_text
+        or "顺延" in alias_text
+        or "调整" in alias_text
+    )
+    if not action_like_alias:
+        return False
+    stripped = re.sub(r"\s+", "", text)
+    compact_alias = re.sub(r"\s+", "", alias_text)
+    command_forms = {
+        compact_alias,
+        f"帮我{compact_alias}",
+        f"请{compact_alias}",
+        f"麻烦{compact_alias}",
+    }
+    return stripped in command_forms
+
+
 def detect_action(message: str) -> str:
     text = (message or "").strip().lower()
     registry = action_registry()
@@ -623,7 +741,7 @@ def detect_action(message: str) -> str:
         for alias in item.get("aliases", [])
     ]
     for alias, action_id in sorted(aliases, key=lambda pair: len(pair[0]), reverse=True):
-        if alias in text:
+        if _alias_can_trigger_action(text, alias, action_id):
             return action_id
     return "none"
 

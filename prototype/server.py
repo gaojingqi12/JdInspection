@@ -17,6 +17,7 @@ from actions import (
     JOBS,
     JOB_LOCK,
     action_title,
+    has_explicit_action_intent,
     is_inspection_related,
     public_actions,
     wait_for_job,
@@ -39,6 +40,7 @@ from agent_tools import (
     tool_title,
     validate_tool_call,
 )
+from data_query import query_inspection_data
 from daily_templates import DailyInspectionRenderer
 from failure_recovery import render_failure_recovery
 from inspection_agent import InspectionAgent, InspectionAgentDeps
@@ -1970,7 +1972,7 @@ def finish_chat_turn(session_id: str, answer: str) -> list[dict]:
 
 
 def out_of_scope_answer() -> str:
-    return "我只负责巡检相关的对话，可以帮你看指标、风险、报告、任务状态，或执行日常巡检、周度巡检和修复脚本。"
+    return "这个问题没有命中巡检工具；如果需要执行巡检、刷新报告或修复，请直接说明要执行的动作。"
 
 
 def merged_ai_config(client_config: dict | None = None) -> dict:
@@ -2025,12 +2027,15 @@ def chat_model_context(summary: dict, session_id: str = "") -> dict:
 
 
 SYSTEM_PROMPT = (
-    "你是一个中文巡检助手，只能处理和收银台&内单交易域巡检有关的问题。"
-    "你的范围包括：巡检指标解释、风险/异常分析、报告摘要、任务状态、脚本执行反馈、延期提测/延期上线修复、AI非深度用户、持续交付和技术改造等。"
-    "如果用户问闲聊、通用知识、代码教学、生活建议、新闻、翻译、写作等非巡检内容，必须拒绝，并用一句话引导用户回到巡检问题。"
-    "不要编造未提供的数据。"
-    "当用户询问日常巡检、今日巡检结果、异常/风险概览或报备草稿时，必须严格按照 daily_inspection_assessment.selected_template 输出。"
-    "不在阈值内的指标已经用警示标识标注，不得修改标识、数值、顺序和模板结构。"
+    "你是收银台&内单交易域巡检控制台里的中文 AI 助手。"
+    "你的第一职责是理解用户真实意图：用户问数据、原因、代码、架构、方案、报告写法或继续上下文时，正常回答；不要把所有问题都改写成巡检执行。"
+    "当用户询问具体人员、具体指标、具体需求、负责人、链接、日期、数量、占比或状态时，要先使用本地数据查询工具返回的结果作答；"
+    "如果工具结果里有命中，不要说当前数据不存在。"
+    "用户明确要求执行巡检、刷新报告、修复、日期顺延等动作时，系统会通过工具链执行；你只需要解释动作、结果和下一步。"
+    "回答巡检数据时只能使用提供的巡检摘要、记忆和历史对话，不要编造未提供的数据。"
+    "只有当用户明确要求“日常巡检总结/今日巡检结果/按模板输出/报备草稿”时，才严格按照 daily_inspection_assessment.selected_template 输出；"
+    "如果用户是在追问原因、解释指标、讨论代码或提优化建议，要自然回答，不要套模板。"
+    "不在阈值内的指标如果来自模板，保留模板中的标识、数值、顺序和结构。"
 )
 
 
@@ -2047,11 +2052,39 @@ def recent_model_history(history_messages: list[dict] | None, limit: int = 8) ->
 
 INTENT_ROUTER_PROMPT = (
     "你是巡检助手的意图路由器。只能输出 JSON，不要输出解释。"
-    "根据用户消息、历史对话、巡检摘要和记忆，从候选 tools 中选择一个工具调用。"
-    "如果用户只是询问数据、状态、总结、风险或继续上下文，tool_call 输出 null，action 输出 none。"
-    "如果用户表达要执行巡检、修复、刷新报告、生成周报文案或日期调整，输出对应 tool_call。"
+    "你的原则是保守调用工具：只有用户明确表达要执行、运行、启动、刷新、生成、修复、顺延、同步或重跑某个动作时，才选择 tool_call。"
+    "如果用户只是询问数据、状态、原因、解释、总结、风险、代码、架构、优化建议或继续上下文，tool_call 必须为 null，action 必须为 none。"
+    "不要因为消息里出现“巡检、持续交付、技术改造、AI、延期、报告”等关键词就调用工具；这些也可能只是问答。"
     "写操作即使缺少确认短语也要输出工具调用，确认门由系统后置处理。"
 )
+
+
+DATA_QUERY_TOOL_NAME = "query_inspection_data"
+
+
+def data_query_tool_schema() -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": DATA_QUERY_TOOL_NAME,
+            "description": "只读查询本地巡检数据、报告产物和历史 JSON。适合查询具体人员、指标、需求、负责人、链接、日期、数量、占比或状态。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "用户想查询的数据问题，保留姓名、指标名、需求编码等关键词。",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "最多返回多少条命中记录，默认 8。",
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    }
 
 
 def extract_json_object(text: str) -> dict:
@@ -2073,6 +2106,182 @@ def extract_json_object(text: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def post_chat_completion(url: str, api_key: str, payload: dict, timeout: int = 45) -> dict:
+    request = Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        body = json.loads(response.read().decode("utf-8"))
+    return body if isinstance(body, dict) else {}
+
+
+def tool_arguments(raw_arguments) -> dict:
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    if isinstance(raw_arguments, str):
+        try:
+            parsed = json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            return {"query": raw_arguments}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def normalize_data_tool_call(raw: dict | None) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    function = raw.get("function") if isinstance(raw.get("function"), dict) else {}
+    name = str(function.get("name") or raw.get("name") or "").strip()
+    if name != DATA_QUERY_TOOL_NAME:
+        return None
+    return {
+        "id": str(raw.get("id") or f"call_{uuid.uuid4().hex[:12]}"),
+        "name": name,
+        "arguments": tool_arguments(function.get("arguments", raw.get("arguments", {}))),
+        "source": "model-data-tool",
+    }
+
+
+DATA_LOOKUP_HINTS = (
+    "多少",
+    "几个",
+    "哪",
+    "谁",
+    "名单",
+    "负责人",
+    "链接",
+    "地址",
+    "状态",
+    "占比",
+    "率",
+    "数量",
+    "需求",
+    "指标",
+    "提交",
+    "代码",
+    "深度用户",
+    "延期",
+    "提测",
+    "上线",
+    "交付",
+    "工时",
+    "日期",
+)
+
+
+def should_prefetch_data_query(message: str, action: str = "none") -> bool:
+    text = str(message or "").strip()
+    if not text or action != "none":
+        return False
+    lowered = text.lower()
+    if any(hint in lowered for hint in DATA_LOOKUP_HINTS):
+        return True
+    return bool(re.search(r"[\u4e00-\u9fff]{2,4}", text) and ("ai" in lowered or "AI" in text))
+
+
+def execute_data_query(query: str, limit: int = 8, source: str = "data-query-tool", session_id: str = "") -> dict:
+    result = query_inspection_data(ROOT_DIR, query, limit)
+    record_tool_event(
+        "data_query_completed",
+        {
+            "session_id": session_id,
+            "source": source,
+            "query": query,
+            "match_count": result.get("match_count"),
+            "matches": (result.get("matches") or [])[:5],
+        },
+    )
+    return result
+
+
+def append_data_query_context(
+    url: str,
+    model: str,
+    api_key: str,
+    messages: list[dict],
+    user_message: str,
+    session_id: str = "",
+    action: str = "none",
+) -> list[dict]:
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "tools": [data_query_tool_schema()],
+        "tool_choice": "auto",
+        "messages": [
+            *messages,
+            {
+                "role": "system",
+                "content": (
+                    "如果用户是在查具体数据，请调用 query_inspection_data。"
+                    "如果只是解释、写作或闲聊，可以不调用工具。"
+                ),
+            },
+        ],
+    }
+    data_result = None
+    tool_call = None
+    try:
+        body = post_chat_completion(url, api_key, payload, timeout=25)
+        choices = body.get("choices") or []
+        message_payload = (choices[0].get("message") or {}) if choices else {}
+        for raw_call in message_payload.get("tool_calls") or []:
+            tool_call = normalize_data_tool_call(raw_call)
+            if tool_call:
+                break
+    except Exception as exc:
+        record_tool_event(
+            "data_query_planner_failed",
+            {"session_id": session_id, "query": user_message, "error": str(exc)},
+        )
+
+    if tool_call:
+        args = tool_call.get("arguments") or {}
+        query = str(args.get("query") or user_message).strip()
+        limit = int(args.get("limit") or 8)
+        record_tool_event(
+            "data_query_requested",
+            {"session_id": session_id, "tool_call": tool_call, "query": query},
+        )
+        data_result = execute_data_query(query, limit, "model-data-tool", session_id)
+    elif should_prefetch_data_query(user_message, action):
+        data_result = execute_data_query(user_message, 8, "data-query-prefetch", session_id)
+
+    if not data_result:
+        return messages
+
+    return [
+        *messages,
+        {
+            "role": "system",
+            "content": (
+                "本地数据查询工具返回 JSON如下。回答用户时优先使用 matches 和 answer_hint；"
+                "如果 match_count > 0，不要回答“当前巡检数据没有该指标”。\n"
+                f"{json.dumps(data_result, ensure_ascii=False)}"
+            ),
+        },
+    ]
+
+
+def suppress_nonexplicit_tool_call(message: str, action: str, tool_call: dict | None, source: str, reason: str = "") -> dict | None:
+    if action == "none" or has_explicit_action_intent(message, action):
+        return None
+    return {
+        "action": "none",
+        "tool_call": None,
+        "confidence": 0,
+        "reason": reason or "用户是在问答或讨论，没有明确要求执行工具。",
+        "source": source,
+        "suppressed_tool_call": tool_call,
+    }
 
 
 def route_intent_with_model(
@@ -2145,6 +2354,9 @@ def route_intent_with_model(
     if isinstance(native_tool_calls, list) and native_tool_calls:
         tool_call = normalize_model_tool_call(native_tool_calls[0])
         action = action_from_tool_call(tool_call)
+        suppressed = suppress_nonexplicit_tool_call(message, action, tool_call, "native-tool-call", "模型提出了工具调用，但用户没有明确表达执行意图。")
+        if suppressed:
+            return suppressed
         return {
             "action": action,
             "tool_call": tool_call,
@@ -2157,6 +2369,9 @@ def route_intent_with_model(
     routed = extract_json_object(content)
     tool_call = resolve_routed_tool_call({**routed, "source": "llm-router"})
     action = action_from_tool_call(tool_call)
+    suppressed = suppress_nonexplicit_tool_call(message, action, tool_call, "llm-router", "路由器提出了工具调用，但用户没有明确表达执行意图。")
+    if suppressed:
+        return suppressed
     return {
         "action": action,
         "tool_call": tool_call,
@@ -2183,6 +2398,7 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
     }.get(action, f"用户想启动动作：{action_title(action)}。")
     context = chat_model_context(summary, str(client_config.get("_session_id") or ""))
     recent_history = recent_model_history(history_messages, limit=8)
+    session_id = str(client_config.get("_session_id") or "")
     model_messages = [
         {
             "role": "system",
@@ -2195,29 +2411,19 @@ def call_chat_model(message: str, action: str, summary: dict, client_config: dic
                 f"用户消息：{message}\n"
                 f"系统判定：{action_text}\n"
                 f"当前巡检摘要 JSON：{json.dumps(context, ensure_ascii=False)}\n"
-                "请先判断是否属于巡检范围；不属于则按系统规则拒绝。"
-                "如果是日常巡检、今日巡检结果、异常/风险概览或报备草稿，请严格按照 daily_inspection_assessment.selected_template 输出；"
-                "其他巡检问题可以简洁回复。"
+                "请根据用户真实意图回答。"
+                "如果用户明确要日常巡检总结、今日巡检结果、按模板输出或报备草稿，严格使用 daily_inspection_assessment.selected_template；"
+                "如果用户是在问原因、解释、代码、架构、优化建议、指标含义或继续上下文，正常自然回答，不要套巡检模板，也不要暗示已经启动任务。"
             ),
         },
     ]
+    model_messages = append_data_query_context(url, model, api_key, model_messages, message, session_id, action)
     payload = {
         "model": model,
-        "temperature": 0.2,
+        "temperature": 0.35,
         "messages": model_messages,
     }
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    request = Request(
-        url,
-        data=data,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urlopen(request, timeout=45) as response:
-        body = json.loads(response.read().decode("utf-8"))
+    body = post_chat_completion(url, api_key, payload, timeout=45)
     choices = body.get("choices") or []
     if not choices:
         return ""
@@ -2243,28 +2449,31 @@ def call_chat_model_stream(message: str, action: str, summary: dict, client_conf
     }.get(action, f"用户想启动动作：{action_title(action)}。")
     context = chat_model_context(summary, str(client_config.get("_session_id") or ""))
     recent_history = recent_model_history(history_messages, limit=8)
+    session_id = str(client_config.get("_session_id") or "")
+    model_messages = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT,
+        },
+        *recent_history,
+        {
+            "role": "user",
+            "content": (
+                f"用户消息：{message}\n"
+                f"系统判定：{action_text}\n"
+                f"当前巡检摘要 JSON：{json.dumps(context, ensure_ascii=False)}\n"
+                "请根据用户真实意图回答。"
+                "如果用户明确要日常巡检总结、今日巡检结果、按模板输出或报备草稿，严格使用 daily_inspection_assessment.selected_template；"
+                "如果用户是在问原因、解释、代码、架构、优化建议、指标含义或继续上下文，正常自然回答，不要套巡检模板，也不要暗示已经启动任务。"
+            ),
+        },
+    ]
+    model_messages = append_data_query_context(url, model, api_key, model_messages, message, session_id, action)
     payload = {
         "model": model,
-        "temperature": 0.2,
+        "temperature": 0.35,
         "stream": True,
-        "messages": [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            },
-            *recent_history,
-            {
-                "role": "user",
-                "content": (
-                    f"用户消息：{message}\n"
-                    f"系统判定：{action_text}\n"
-                    f"当前巡检摘要 JSON：{json.dumps(context, ensure_ascii=False)}\n"
-                    "请先判断是否属于巡检范围；不属于则按系统规则拒绝。"
-                    "如果是日常巡检、今日巡检结果、异常/风险概览或报备草稿，请严格按照 daily_inspection_assessment.selected_template 输出；"
-                    "其他巡检问题可以简洁回复。"
-                ),
-            },
-        ],
+        "messages": model_messages,
     }
     request = Request(
         url,
@@ -3294,9 +3503,6 @@ def answer_chat(message: str, summary: dict, action: str = "none", model_answer:
     if not text:
         return "你可以直接问我今天指标、异常项、AI 非深度用户，或让我生成一段 JoyClaw 报备草稿。"
 
-    if not is_inspection_related(text, action):
-        return out_of_scope_answer()
-
     if action != "none":
         title = action_title(action)
         prefix = f"已开始执行：{title}。任务面板会持续刷新步骤、状态和最近日志。"
@@ -3304,6 +3510,9 @@ def answer_chat(message: str, summary: dict, action: str = "none", model_answer:
 
     if model_answer:
         return model_answer
+
+    if not is_inspection_related(text, action):
+        return "这个问题没有命中巡检工具，也没有可用的大模型回答。你可以先检查模型配置，或换成巡检数据、项目逻辑、代码实现相关的问题继续问我。"
 
     if any(token in text for token in ("报备", "周报", "总结", "草稿")):
         highlights = "；".join(lines[:7])
