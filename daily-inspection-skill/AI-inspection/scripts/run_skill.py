@@ -38,10 +38,16 @@ def save_debug_screenshot(page, out_dir: Path, name: str):
     log(f"已保存截图: {path}")
 
 
-def get_yesterday_and_today():
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    return yesterday.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
+def ai_inspection_target_date(today: date | None = None) -> date:
+    value = today or date.today()
+    if value.weekday() == 0:
+        return value - timedelta(days=3)
+    return value
+
+
+def get_ai_date_range():
+    target = ai_inspection_target_date()
+    return target.strftime("%Y-%m-%d"), target.strftime("%Y-%m-%d")
 
 
 def click_day_tab(page):
@@ -95,7 +101,7 @@ def fill_input_and_enter(page, input_locator, value: str):
 
 
 def fill_date_range(page):
-    start_date, end_date = get_yesterday_and_today()
+    start_date, end_date = get_ai_date_range()
     log(f"开始日期: {start_date}, 结束日期: {end_date}")
 
     wrappers = page.locator(".el-date-editor.el-range-editor:visible")
@@ -175,7 +181,12 @@ def download_indicator_file(page, out_dir: Path):
     return save_path
 
 
-def export_non_deep_users_to_json(excel_path: Path, target_names: list[str], out_dir: Path):
+def export_non_deep_users_to_json(
+    excel_path: Path,
+    target_names: list[str],
+    out_dir: Path,
+    inspection_date: str | None = None,
+):
     log(f"开始读取Excel: {excel_path}")
 
     df = pd.read_excel(excel_path)
@@ -197,7 +208,7 @@ def export_non_deep_users_to_json(excel_path: Path, target_names: list[str], out
 
     result = result_df.to_dict(orient="records")
 
-    today_str = date.today().strftime("%Y-%m-%d")
+    today_str = inspection_date or ai_inspection_target_date().strftime("%Y-%m-%d")
     json_path = out_dir / f"non_deep_users_{today_str}.json"
 
     with open(json_path, "w", encoding="utf-8") as f:
@@ -240,7 +251,8 @@ def main():
             json_path, result = export_non_deep_users_to_json(
                 download_path,
                 TARGET_NAMES,
-                out_dir
+                out_dir,
+                end_date,
             )
 
             log(f"完成：日维度，日期范围 {start_date} ~ {end_date}")

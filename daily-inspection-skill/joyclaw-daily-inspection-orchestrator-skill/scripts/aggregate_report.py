@@ -338,8 +338,14 @@ def load_continuous_delivery(today: date) -> dict[str, Any]:
     }
 
 
+def ai_inspection_target_date(today: date) -> date:
+    if today.weekday() == 0:
+        return today - timedelta(days=3)
+    return today
+
+
 def load_ai_inspection(today: date) -> dict[str, Any]:
-    day = today.isoformat()
+    day = ai_inspection_target_date(today).isoformat()
     output_json = AI_DIR / "out" / f"non_deep_user_names_{day}.json"
     source_json = AI_DIR / "out" / f"non_deep_users_{day}.json"
 

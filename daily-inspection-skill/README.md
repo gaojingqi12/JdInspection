@@ -249,7 +249,7 @@ AI 脚本会下载 Excel，并生成当天源 JSON：
 AI-inspection/out/non_deep_users_YYYY-MM-DD.json
 ```
 
-然后总编排从当天源 JSON 派生 `ai_inspection` 名单；如果已存在 `AI-inspection/out/non_deep_user_names_YYYY-MM-DD.json`，可作为兜底读取。
+然后总编排从对应日期的源 JSON 派生 `ai_inspection` 名单；周一巡检时 AI 日期取上周五，如果已存在 `AI-inspection/out/non_deep_user_names_YYYY-MM-DD.json`，可作为兜底读取。
 
 
 ### 第三步：跑持续交付巡检
@@ -283,7 +283,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 | 延期上线率 | 当天 JSON | `out/history/YYYY-MM-DD.json` |
 | 技术改造工时占比 | 当天 JSON | `out/history/YYYY-MM-DD.json` |
 | 双周交付率 | 图表 tooltip | `out/history/YYYY-MM-DD.json` |
-| AI 巡检 | 当天源 JSON | `out/non_deep_users_YYYY-MM-DD.json`；已有 `out/non_deep_user_names_YYYY-MM-DD.json` 时可兜底 |
+| AI 巡检 | 对应日期源 JSON | `out/non_deep_users_YYYY-MM-DD.json`；周一取上周五，已有 `out/non_deep_user_names_YYYY-MM-DD.json` 时可兜底 |
 | 持续交付 | 当天 JSON | `out/continuous_delivery_YYYY-MM-DD.json` |
 | 总编排 | 各模块 JSON | `weekly-inspection-summary.json`、根目录 `index.html`、`daily-inspection-summary.md` |
 
