@@ -171,6 +171,22 @@ def friday_inspection_steps() -> list[dict]:
     return [step([py, "scripts/run_skill.py", "--headless"], friday_dir(), "周度 INE 指标抓取")]
 
 
+def aggregate_report_step(skip_repair: bool = True) -> dict:
+    root = daily_dir()
+    py = python_bin()
+    command = [py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py"]
+    if skip_repair:
+        command.append("--skip-repair")
+    return step(command, root, "刷新日常巡检总报告")
+
+
+def single_daily_inspection_steps(cwd: Path, label: str) -> list[dict]:
+    return [
+        step([python_bin(), "scripts/run_skill.py"], cwd, label),
+        aggregate_report_step(skip_repair=True),
+    ]
+
+
 def action_registry() -> dict[str, dict]:
     py = python_bin()
     d = daily_dir()
@@ -207,58 +223,58 @@ def action_registry() -> dict[str, dict]:
         "okr_all": {
             "title": "OKR 四项巡检",
             "group": "单项巡检",
-            "description": "只运行延期提测、延期上线、技术改造工时、双周交付率四项。",
+            "description": "运行延期提测、延期上线、技术改造工时、双周交付率四项，并刷新总报告。",
             "risk": "safe",
             "aliases": ["okr巡检", "OKR巡检", "okr四项"],
-            "steps": daily_inspection_steps(skip_repair=True)[:4],
+            "steps": daily_inspection_steps(skip_repair=True)[:4] + [aggregate_report_step(skip_repair=True)],
         },
         "delay_test_rate": {
             "title": "延期提测率",
             "group": "单项巡检",
-            "description": "单独抓取延期提测率指标。",
+            "description": "单独抓取延期提测率指标，并刷新总报告。",
             "risk": "safe",
             "aliases": ["延期提测率", "提测率巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检")],
+            "steps": single_daily_inspection_steps(d / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检"),
         },
         "delay_online_rate": {
             "title": "延期上线率",
             "group": "单项巡检",
-            "description": "单独抓取延期上线率指标。",
+            "description": "单独抓取延期上线率指标，并刷新总报告。",
             "risk": "safe",
             "aliases": ["延期上线率", "上线率巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检")],
+            "steps": single_daily_inspection_steps(d / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检"),
         },
         "technical_refactor": {
             "title": "技术改造工时",
             "group": "单项巡检",
-            "description": "单独抓取技术改造工时占比。",
+            "description": "单独抓取技术改造工时占比，并刷新总报告。",
             "risk": "safe",
             "aliases": ["技术改造", "技术改造工时", "技改工时"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检")],
+            "steps": single_daily_inspection_steps(d / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检"),
         },
         "biweekly_delivery": {
             "title": "双周交付率",
             "group": "单项巡检",
-            "description": "单独抓取双周交付率。",
+            "description": "单独抓取双周交付率，并刷新总报告。",
             "risk": "safe",
             "aliases": ["双周交付", "双周交付率"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检")],
+            "steps": single_daily_inspection_steps(d / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检"),
         },
         "ai_inspection": {
             "title": "AI 深度用户",
             "group": "单项巡检",
-            "description": "下载并筛选 AI 非深度用户名单。",
+            "description": "下载并筛选 AI 非深度用户名单，并刷新总报告。",
             "risk": "safe",
             "aliases": ["AI巡检", "ai巡检", "非深度用户"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "AI-inspection", "AI 深度用户巡检")],
+            "steps": single_daily_inspection_steps(d / "AI-inspection", "AI 深度用户巡检"),
         },
         "continuous_delivery": {
             "title": "持续交付",
             "group": "单项巡检",
-            "description": "抓取持续交付三张指标卡。",
+            "description": "抓取持续交付三张指标卡，并刷新总报告。",
             "risk": "safe",
             "aliases": ["持续交付", "持续交付巡检"],
-            "steps": [step([py, "scripts/run_skill.py"], d / "ContinuousDelivery-inspection", "持续交付巡检")],
+            "steps": single_daily_inspection_steps(d / "ContinuousDelivery-inspection", "持续交付巡检"),
         },
         "aggregate_report": {
             "title": "刷新总报告",
@@ -266,7 +282,7 @@ def action_registry() -> dict[str, dict]:
             "description": "只读取已有 JSON 重新生成日常巡检 HTML，不触发修复。",
             "risk": "safe",
             "aliases": ["刷新报告", "刷新总报告", "生成总报告", "重新生成报告"],
-            "steps": [step([py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py", "--skip-repair"], d, "生成日常巡检报告")],
+            "steps": [aggregate_report_step(skip_repair=True)],
         },
         "friday_report_text": {
             "title": "周报备文案",

@@ -19,7 +19,7 @@
    - 延期提测需求修复
    - 延期上线需求修复
 3. **AI 巡检**
-   - 从当天 AI 巡检结果里找出“是否深度用户 = 否”的人员名单
+   - 从目标数据日 AI 巡检结果里找出“是否深度用户 = 否”的人员名单
 4. **持续交付巡检**
    - 团队空间开发测试上线需求数
    - 团队空间_持需交付_开发测试上线需求数
@@ -90,7 +90,7 @@ daily-inspection-skill/
 - 双周交付率
   - 查询后 hover 图表 canvas，从 tooltip 提取双周交付率，并写入每日 JSON
 - AI 巡检
-  - 下载 Excel 后直接生成当天源 JSON
+  - 下载 Excel 后直接生成目标数据日源 JSON
 - 持续交付
   - 会在查询后直接从三个指标卡片元素提取当天值，并写入当天 JSON
 
@@ -243,13 +243,13 @@ OKR-inspection/bi-weekly-delivery-rate-skill/out/history/YYYY-MM-DD.json
 
 ### 第二步：跑 AI 巡检
 
-AI 脚本会下载 Excel，并生成当天源 JSON：
+AI 脚本会下载 Excel，并生成目标数据日源 JSON：
 
 ```text
 AI-inspection/out/non_deep_users_YYYY-MM-DD.json
 ```
 
-然后总编排从对应日期的源 JSON 派生 `ai_inspection` 名单；周一巡检时 AI 日期取上周五，如果已存在 `AI-inspection/out/non_deep_user_names_YYYY-MM-DD.json`，可作为兜底读取。
+然后总编排从对应日期的源 JSON 派生 `ai_inspection` 名单；周一巡检时 AI 日期取上周五，周二至周五取前一工作日，周末兜底取周五。如果已存在 `AI-inspection/out/non_deep_user_names_YYYY-MM-DD.json`，可作为兜底读取。
 
 
 ### 第三步：跑持续交付巡检
@@ -283,7 +283,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 | 延期上线率 | 当天 JSON | `out/history/YYYY-MM-DD.json` |
 | 技术改造工时占比 | 当天 JSON | `out/history/YYYY-MM-DD.json` |
 | 双周交付率 | 图表 tooltip | `out/history/YYYY-MM-DD.json` |
-| AI 巡检 | 对应日期源 JSON | `out/non_deep_users_YYYY-MM-DD.json`；周一取上周五，已有 `out/non_deep_user_names_YYYY-MM-DD.json` 时可兜底 |
+| AI 巡检 | 目标数据日源 JSON | `out/non_deep_users_YYYY-MM-DD.json`；周一取上周五，周二至周五取前一工作日，已有 `out/non_deep_user_names_YYYY-MM-DD.json` 时可兜底 |
 | 持续交付 | 当天 JSON | `out/continuous_delivery_YYYY-MM-DD.json` |
 | 总编排 | 各模块 JSON | `weekly-inspection-summary.json`、根目录 `index.html`、`daily-inspection-summary.md` |
 

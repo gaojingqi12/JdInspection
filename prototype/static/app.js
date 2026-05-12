@@ -3,6 +3,7 @@ const state = {
   chartOptions: [],
   expandedChart: "",
   jobsTimer: null,
+  jobStatuses: {},
   actions: [],
   auditEvents: [],
   chatSessions: [],
@@ -785,9 +786,19 @@ async function clearChatHistory() {
 
 async function loadJobs() {
   const res = await fetch("/api/jobs");
-  if (!res.ok) return;
+  if (!res.ok) return { jobs: [], becameTerminal: false };
   const payload = await res.json();
-  renderJobs(payload.jobs || []);
+  const jobs = payload.jobs || [];
+  const terminalStatuses = new Set(["success", "partial", "failed", "timeout"]);
+  const becameTerminal = jobs.some((job) => {
+    const previous = state.jobStatuses[job.id];
+    return previous && previous !== job.status && terminalStatuses.has(job.status);
+  });
+  jobs.forEach((job) => {
+    state.jobStatuses[job.id] = job.status;
+  });
+  renderJobs(jobs);
+  return { jobs, becameTerminal };
 }
 
 async function loadAgentTrace() {
@@ -1043,8 +1054,17 @@ function renderFreshnessPanel(summary) {
 function ensureJobsPolling() {
   if (state.jobsTimer) return;
   state.jobsTimer = setInterval(async () => {
-    await loadJobs();
+    const { jobs, becameTerminal } = await loadJobs();
     await loadAgentTrace();
+    if (becameTerminal) {
+      await loadSummary();
+      await loadActions();
+    }
+    const hasRunningJob = jobs.some((job) => ["queued", "running"].includes(job.status));
+    if (!hasRunningJob) {
+      window.clearInterval(state.jobsTimer);
+      state.jobsTimer = null;
+    }
   }, 3000);
 }
 

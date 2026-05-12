@@ -341,13 +341,40 @@ def load_continuous_delivery(today: date) -> dict[str, Any]:
 def ai_inspection_target_date(today: date) -> date:
     if today.weekday() == 0:
         return today - timedelta(days=3)
-    return today
+    if today.weekday() == 6:
+        return today - timedelta(days=2)
+    return today - timedelta(days=1)
+
+
+def choose_ai_json(inspection_json: Path, query_json: Path) -> Path:
+    if inspection_json.exists() and query_json.exists():
+        try:
+            inspection_data = read_json(inspection_json)
+        except Exception:
+            return inspection_json
+        if isinstance(inspection_data, dict) and (inspection_data.get("inspection_date") or inspection_data.get("query_date")):
+            return inspection_json
+        if query_json.stat().st_mtime > inspection_json.stat().st_mtime:
+            return query_json
+        return inspection_json
+    if inspection_json.exists():
+        return inspection_json
+    if query_json.exists():
+        return query_json
+    return inspection_json
 
 
 def load_ai_inspection(today: date) -> dict[str, Any]:
-    day = ai_inspection_target_date(today).isoformat()
-    output_json = AI_DIR / "out" / f"non_deep_user_names_{day}.json"
-    source_json = AI_DIR / "out" / f"non_deep_users_{day}.json"
+    inspection_day = today.isoformat()
+    query_day = ai_inspection_target_date(today).isoformat()
+    output_json = choose_ai_json(
+        AI_DIR / "out" / f"non_deep_user_names_{inspection_day}.json",
+        AI_DIR / "out" / f"non_deep_user_names_{query_day}.json",
+    )
+    source_json = choose_ai_json(
+        AI_DIR / "out" / f"non_deep_users_{inspection_day}.json",
+        AI_DIR / "out" / f"non_deep_users_{query_day}.json",
+    )
 
     if source_json.exists():
         try:
@@ -360,19 +387,23 @@ def load_ai_inspection(today: date) -> dict[str, Any]:
             ]
             names = [user["name"] for user in users if user["name"]]
             return {
-                "date": day,
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
                 "indicator_type": AI_CONFIG["indicator_type"],
                 "indicator_name": AI_CONFIG["indicator_name"],
-                "status": "success",
+                "status": raw_data.get("status", "success") if isinstance(raw_data, dict) else "success",
                 "source_json": f"../../AI-inspection/out/{source_json.name}",
                 "output_json": f"../../AI-inspection/out/{output_json.name}" if output_json.exists() else "",
-                "count": len(names),
+                "count": raw_data.get("count", len(names)) if isinstance(raw_data, dict) else len(names),
                 "names": names,
                 "users": users,
             }
         except Exception as exc:
             return {
-                "date": day,
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
                 "indicator_type": AI_CONFIG["indicator_type"],
                 "indicator_name": AI_CONFIG["indicator_name"],
                 "status": "failed",
@@ -404,7 +435,9 @@ def load_ai_inspection(today: date) -> dict[str, Any]:
                 raise ValueError(f"Unexpected data type: {type(data)}")
             
             return {
-                "date": day,
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
                 "indicator_type": AI_CONFIG["indicator_type"],
                 "indicator_name": AI_CONFIG["indicator_name"],
                 "status": status,
@@ -416,7 +449,9 @@ def load_ai_inspection(today: date) -> dict[str, Any]:
             }
         except Exception as exc:
             return {
-                "date": day,
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
                 "indicator_type": AI_CONFIG["indicator_type"],
                 "indicator_name": AI_CONFIG["indicator_name"],
                 "status": "failed",
@@ -429,7 +464,9 @@ def load_ai_inspection(today: date) -> dict[str, Any]:
             }
 
     return {
-        "date": day,
+        "date": inspection_day,
+        "inspection_date": inspection_day,
+        "query_date": query_day,
         "indicator_type": AI_CONFIG["indicator_type"],
         "indicator_name": AI_CONFIG["indicator_name"],
         "status": "missing",

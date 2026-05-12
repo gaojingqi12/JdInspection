@@ -42,7 +42,9 @@ def ai_inspection_target_date(today: date | None = None) -> date:
     value = today or date.today()
     if value.weekday() == 0:
         return value - timedelta(days=3)
-    return value
+    if value.weekday() == 6:
+        return value - timedelta(days=2)
+    return value - timedelta(days=1)
 
 
 def get_ai_date_range():
@@ -186,6 +188,7 @@ def export_non_deep_users_to_json(
     target_names: list[str],
     out_dir: Path,
     inspection_date: str | None = None,
+    query_date: str | None = None,
 ):
     log(f"开始读取Excel: {excel_path}")
 
@@ -208,14 +211,29 @@ def export_non_deep_users_to_json(
 
     result = result_df.to_dict(orient="records")
 
-    today_str = inspection_date or ai_inspection_target_date().strftime("%Y-%m-%d")
-    json_path = out_dir / f"non_deep_users_{today_str}.json"
+    inspection_day = inspection_date or date.today().strftime("%Y-%m-%d")
+    json_path = out_dir / f"non_deep_users_{inspection_day}.json"
+    payload = {
+        "date": inspection_day,
+        "inspection_date": inspection_day,
+        "query_date": query_date or "",
+        "status": "success",
+        "count": len(result),
+        "users": result,
+    }
 
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    history_dir = out_dir / "history"
+    history_dir.mkdir(exist_ok=True)
+    history_path = history_dir / f"{inspection_day}.json"
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump({**payload, "source_json": json_path.name}, f, ensure_ascii=False, indent=2)
 
     log(f"筛选完成，共 {len(result)} 人")
     log(f"JSON已输出: {json_path}")
+    log(f"趋势历史已输出: {history_path}")
 
     return json_path, result
 
@@ -252,6 +270,7 @@ def main():
                 download_path,
                 TARGET_NAMES,
                 out_dir,
+                date.today().strftime("%Y-%m-%d"),
                 end_date,
             )
 

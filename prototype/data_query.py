@@ -274,6 +274,9 @@ def inspection_data_paths(root_dir: Path) -> list[Path]:
     ai_out = root_dir / "daily-inspection-skill" / "AI-inspection" / "out"
     if ai_out.exists():
         paths.extend(sorted(ai_out.glob("non_deep_users_*.json"), reverse=True)[:5])
+        history_dir = ai_out / "history"
+        if history_dir.exists():
+            paths.extend(sorted(history_dir.glob("*.json"), reverse=True)[:10])
     repair_dirs = [
         root_dir / "daily-inspection-skill" / "reschedule-delayed-test " / "history",
         root_dir / "daily-inspection-skill" / "repair-delayed-launch" / "history",

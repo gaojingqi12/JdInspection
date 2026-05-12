@@ -6,7 +6,7 @@ import re
 import shutil
 import threading
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -59,6 +59,7 @@ THURSDAY_SUBMIT_TEST_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "t
 THURSDAY_ONLINE_JSON_PATH = ROOT_DIR / "thursday-to-friday-adjustment" / "thursday_online_demands.json"
 WEEKLY_METRICS_PATH = ROOT_DIR / "friday-inspection-skill" / "scripts" / "out" / "ine_metrics.json"
 AI_INSPECTION_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "AI-inspection" / "out"
+AI_INSPECTION_HISTORY_DIR = AI_INSPECTION_OUT_DIR / "history"
 CONTINUOUS_DELIVERY_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "ContinuousDelivery-inspection" / "out"
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
@@ -1601,7 +1602,7 @@ def status_badge_html(status: str) -> str:
 
 
 def render_daily_report_html() -> str:
-    summary = compact_summary(read_json(SUMMARY_PATH, {}))
+    summary = current_summary()
     metrics = [
         report_metric(card.get("label"), card.get("display_value"), f"{card.get('date', '-')}")
         for card in summary.get("overview", [])[:8]
@@ -1689,7 +1690,7 @@ def repair_items_from_summary(summary: dict) -> list[dict]:
 
 
 def render_repair_report_html() -> str:
-    summary = compact_summary(read_json(SUMMARY_PATH, {}))
+    summary = current_summary()
     repairs = repair_items_from_summary(summary)
     metrics = [
         report_metric("修复巡检项", len(repairs), "延期提测 / 延期上线"),
@@ -2610,6 +2611,166 @@ def display_unit(unit: str) -> str:
     }.get(unit, unit)
 
 
+def first_present_value(item: dict, *keys: str):
+    for key in keys:
+        value = item.get(key)
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def normalize_ai_user_for_summary(item: dict) -> dict:
+    submit_rate = first_present_value(
+        item,
+        "ai_code_local_submit_rate",
+        "AI代码本地提交占比",
+        "AI 代码本地提交占比",
+        "AI代码本地提交占比(%)",
+        "AI 代码本地提交占比(%)",
+    )
+    return {
+        "erp": first_present_value(item, "erp", "用户erp", "用户 erp", "用户ERP") or "",
+        "name": first_present_value(item, "name", "用户姓名", "姓名", "用户erp", "用户 erp", "erp") or "",
+        "ai_code_local_submit_rate": parse_numberish(submit_rate),
+        "is_deep_user": first_present_value(item, "is_deep_user", "是否深度用户") or "",
+    }
+
+
+def ai_inspection_target_date(today: date | None = None) -> date:
+    value = today or datetime.now().date()
+    if value.weekday() == 0:
+        return value - timedelta(days=3)
+    if value.weekday() == 6:
+        return value - timedelta(days=2)
+    return value - timedelta(days=1)
+
+
+def choose_ai_json(inspection_json: Path, query_json: Path) -> Path:
+    if inspection_json.exists() and query_json.exists():
+        inspection_data = read_json(inspection_json, None)
+        if isinstance(inspection_data, dict) and (inspection_data.get("inspection_date") or inspection_data.get("query_date")):
+            return inspection_json
+        if query_json.stat().st_mtime > inspection_json.stat().st_mtime:
+            return query_json
+        return inspection_json
+    if inspection_json.exists():
+        return inspection_json
+    if query_json.exists():
+        return query_json
+    return inspection_json
+
+
+def load_runtime_ai_inspection() -> dict | None:
+    inspection_day = datetime.now().date().isoformat()
+    query_day = ai_inspection_target_date().isoformat()
+    source_json = choose_ai_json(
+        AI_INSPECTION_OUT_DIR / f"non_deep_users_{inspection_day}.json",
+        AI_INSPECTION_OUT_DIR / f"non_deep_users_{query_day}.json",
+    )
+    output_json = choose_ai_json(
+        AI_INSPECTION_OUT_DIR / f"non_deep_user_names_{inspection_day}.json",
+        AI_INSPECTION_OUT_DIR / f"non_deep_user_names_{query_day}.json",
+    )
+
+    if source_json.exists():
+        try:
+            raw_data = read_json(source_json, None)
+            raw_users = raw_data if isinstance(raw_data, list) else raw_data.get("users", []) if isinstance(raw_data, dict) else []
+            users = [
+                normalize_ai_user_for_summary(item)
+                for item in raw_users
+                if isinstance(item, dict)
+                and str(first_present_value(item, "是否深度用户", "is_deep_user") or "").strip() == "否"
+            ]
+            names = [user["name"] for user in users if user.get("name")]
+            return {
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
+                "indicator_type": "ai_inspection",
+                "indicator_name": "AI 深度用户",
+                "status": raw_data.get("status", "success") if isinstance(raw_data, dict) else "success",
+                "source_json": f"../../AI-inspection/out/{source_json.name}",
+                "output_json": f"../../AI-inspection/out/{output_json.name}" if output_json.exists() else "",
+                "count": raw_data.get("count", len(names)) if isinstance(raw_data, dict) else len(names),
+                "names": names,
+                "users": users,
+            }
+        except Exception as exc:
+            return {
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
+                "indicator_type": "ai_inspection",
+                "indicator_name": "AI 深度用户",
+                "status": "failed",
+                "source_json": f"../../AI-inspection/out/{source_json.name}",
+                "output_json": f"../../AI-inspection/out/{output_json.name}" if output_json.exists() else "",
+                "count": 0,
+                "names": [],
+                "users": [],
+                "error": str(exc),
+            }
+
+    if output_json.exists():
+        try:
+            data = read_json(output_json, None)
+            if isinstance(data, dict):
+                users = [normalize_ai_user_for_summary(item) for item in data.get("users", []) if isinstance(item, dict)]
+                names = data.get("names") or [user["name"] for user in users if user.get("name")]
+                count = data.get("count", len(names))
+                status = data.get("status", "success")
+            elif isinstance(data, list):
+                users = [normalize_ai_user_for_summary(item) for item in data if isinstance(item, dict)]
+                names = [user["name"] for user in users if user.get("name")]
+                count = len(names)
+                status = "success"
+            else:
+                raise ValueError(f"Unexpected data type: {type(data)}")
+            return {
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
+                "indicator_type": "ai_inspection",
+                "indicator_name": "AI 深度用户",
+                "status": status,
+                "source_json": f"../../AI-inspection/out/{source_json.name}",
+                "output_json": f"../../AI-inspection/out/{output_json.name}",
+                "count": count,
+                "names": names,
+                "users": users,
+            }
+        except Exception as exc:
+            return {
+                "date": inspection_day,
+                "inspection_date": inspection_day,
+                "query_date": query_day,
+                "indicator_type": "ai_inspection",
+                "indicator_name": "AI 深度用户",
+                "status": "failed",
+                "source_json": f"../../AI-inspection/out/{source_json.name}",
+                "output_json": f"../../AI-inspection/out/{output_json.name}",
+                "count": 0,
+                "names": [],
+                "users": [],
+                "error": str(exc),
+            }
+
+    return None
+
+
+def refresh_runtime_summary_blocks(summary: dict) -> dict:
+    payload = dict(summary)
+    ai_inspection = load_runtime_ai_inspection()
+    if ai_inspection:
+        payload["ai_inspection"] = ai_inspection
+    return payload
+
+
+def current_summary() -> dict:
+    return compact_summary(refresh_runtime_summary_blocks(read_json(SUMMARY_PATH, {})))
+
+
 def build_overview(summary: dict) -> list[dict]:
     cards: list[dict] = []
     for indicator in summary.get("indicators", []):
@@ -2803,10 +2964,21 @@ def ai_non_deep_user_points(summary: dict) -> list[dict]:
             value = data.get("count")
             if value is None and isinstance(users, list):
                 value = len(users)
-            date_value = str(data.get("date") or date_from_filename(path))
+            date_value = str(data.get("inspection_date") or data.get("date") or date_from_filename(path))
         else:
             continue
         points.append({"date": date_value, "value": value, "unit": "count"})
+
+    for path in sorted(AI_INSPECTION_HISTORY_DIR.glob("*.json")):
+        data = read_json(path, None)
+        if not isinstance(data, dict):
+            continue
+        users = data.get("users")
+        value = data.get("count")
+        if value is None and isinstance(users, list):
+            value = len(users)
+        date_value = str(data.get("inspection_date") or data.get("date") or date_from_filename(path) or path.stem)
+        points.append({"date": date_value, "value": value, "unit": "count", "source": "history"})
 
     ai = summary.get("ai_inspection") or {}
     current_value = ai.get("count")
@@ -3136,7 +3308,7 @@ def static_report_shell(page_title: str, current_key: str, report_content: str) 
 
 
 def build_static_site_index_html() -> str:
-    summary = compact_summary(read_json(SUMMARY_PATH, {}))
+    summary = current_summary()
     chart_options = build_chart_options(summary)
     ai = summary.get("ai_inspection") or {}
     active_chart_id = preferred_static_trend_id(chart_options)
@@ -3606,7 +3778,7 @@ def inspection_agent() -> InspectionAgent:
             InspectionAgentDeps(
                 begin_chat_turn=begin_chat_turn,
                 finish_chat_turn=finish_chat_turn,
-                read_summary=lambda: compact_summary(read_json(SUMMARY_PATH, {})),
+                read_summary=current_summary,
                 read_memory=read_agent_memory,
                 detect_tool_call=detect_tool_call,
                 route_intent=route_intent_with_model,
@@ -3662,7 +3834,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             return self.serve_file(STATIC_DIR / "index.html")
         if path == "/api/summary":
             sync_metric_preview_assets()
-            summary = compact_summary(read_json(SUMMARY_PATH, {}))
+            summary = current_summary()
             return self.write_json(summary)
         if path == "/api/actions":
             return self.write_json({"actions": public_actions(), "tools": public_tools()})
@@ -3759,7 +3931,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             if not config.get("api_key"):
                 return self.write_json({"ok": False, "message": "后端还没有配置 API Key。", "config": public_ai_config(config)})
             try:
-                answer = call_chat_model("请只回复：连接正常", "none", compact_summary(read_json(SUMMARY_PATH, {})), config, [])
+                answer = call_chat_model("请只回复：连接正常", "none", current_summary(), config, [])
             except Exception as exc:
                 return self.write_json({"ok": False, "message": f"模型连接失败：{exc}", "config": public_ai_config(config)})
             return self.write_json({"ok": bool(answer), "message": answer or "模型没有返回内容。", "config": public_ai_config(config)})
