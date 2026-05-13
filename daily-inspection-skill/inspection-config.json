@@ -2,7 +2,7 @@
   "common": {
     "department_c3": "支付方案研发部",
     "display_domain": "收银台&内单交易域",
-    "online_report_url": "https://gaojingqi12.github.io/inspection/"
+    "online_report_url": "https://gaojingqi12.github.io/JdInspection/"
   },
   "okr": {
     "delay_test_rate": {

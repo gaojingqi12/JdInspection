@@ -11,3 +11,5 @@
 - 团队空间上线需求：{team_space_online_requirements}
 - 持续交付需求：{continuous_delivery_requirements}
 - 持续交付占比：{continuous_delivery_rate}
+
+巡检报告：https://gaojingqi12.github.io/JdInspection/
