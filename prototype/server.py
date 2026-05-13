@@ -359,7 +359,10 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
         url("{STATIC_ROOT_ASSET_PATH}") !important;
     }}
     .public-command-bar {{
-      grid-template-columns: minmax(0, 1fr);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(260px, 19vw, 410px);
+      align-items: stretch;
+      width: 100%;
       margin-bottom: 18px;
     }}
     .public-command-bar::before,
@@ -367,6 +370,7 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       display: none;
     }}
     .public-command-bar .report-group {{
+      width: auto;
       min-height: 0;
     }}
     .public-command-bar .report-links {{
@@ -469,12 +473,15 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       margin-top: 6px;
     }}
     .public-static-hero-art {{
-      position: absolute;
-      right: clamp(-170px, -8vw, -90px);
-      top: 210px;
-      z-index: 0;
-      width: clamp(260px, 19vw, 410px);
-      aspect-ratio: 1 / 1;
+      position: relative;
+      right: auto;
+      top: auto;
+      z-index: 1;
+      width: 100%;
+      height: clamp(190px, 14vw, 276px);
+      min-height: 0;
+      align-self: stretch;
+      aspect-ratio: auto;
       margin: 0;
       border: 1px solid rgba(255,255,255,0.16);
       border-radius: 18px;
@@ -497,7 +504,7 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       display: block;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
       object-position: center;
       filter: saturate(1.04) contrast(0.98);
     }}
@@ -732,6 +739,9 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       }}
       .public-command-bar .report-links {{
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
+      .public-command-bar {{
+        grid-template-columns: minmax(0, 1fr);
       }}
       .public-trend-layout {{
         grid-template-columns: 1fr;
@@ -3338,15 +3348,14 @@ def build_static_site_index_html() -> str:
       </div>
     </header>
 
-    <figure class="public-static-hero-art" aria-hidden="true">
-      <img src="{STATIC_HERO_BRAND_PATH}" alt="" loading="lazy" />
-    </figure>
-
     <section class="command-bar public-command-bar">
       <div class="command-group report-group">
         <div class="command-label">查看报告</div>
         <div class="report-links">{static_report_hub_html()}</div>
       </div>
+      <figure class="public-static-hero-art" aria-hidden="true">
+        <img src="{STATIC_HERO_BRAND_PATH}" alt="" loading="lazy" />
+      </figure>
     </section>
 
     <section id="dashboard" class="metric-grid">{public_overview_cards_html(summary)}</section>
