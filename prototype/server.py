@@ -504,7 +504,7 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
       display: block;
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover;
       object-position: center;
       filter: saturate(1.04) contrast(0.98);
     }}
