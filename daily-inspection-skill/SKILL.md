@@ -69,19 +69,19 @@ OKR 巡检顺序：
 每个 OKR skill 目录下运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 AI 巡检在 OKR 完成后执行，从仓库根目录的 `AI-inspection` 目录运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 持续交付巡检在 AI 完成后执行，从仓库根目录的 `ContinuousDelivery-inspection` 目录运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 ## 职责边界
@@ -107,7 +107,7 @@ JoyClaw 必须按下面的数据源读取，不要混用：
 | AI 巡检 | `AI-inspection/out/non_deep_users_YYYY-MM-DD.json` | 读取目标数据日源 JSON；周一读上周五，周二至周五读前一工作日，已有 `non_deep_user_names_YYYY-MM-DD.json` 时可兜底 |
 | 持续交付 | `ContinuousDelivery-inspection/out/continuous_delivery_YYYY-MM-DD.json` | 直接读当天 JSON |
 | 双周交付率 | `OKR-inspection/bi-weekly-delivery-rate-skill/out/history/YYYY-MM-DD.json` | 脚本 hover 图表 tooltip 后直接生成 |
-| 延期提测修复巡检 | `reschedule-delayed-test /history/YYYY-MM-DD.json` | 当天延期提测需求数大于 0 后执行并读取 |
+| 延期提测修复巡检 | `reschedule-delayed-test/history/YYYY-MM-DD.json` | 当天延期提测需求数大于 0 后执行并读取 |
 | 延期上线修复巡检 | `repair-delayed-launch/history/YYYY-MM-DD.json` | 当天延期上线需求数大于 0 后执行并读取 |
 
 约束：
@@ -151,8 +151,8 @@ JoyClaw 必须按下面的数据源读取，不要混用：
 
 总编排读取当天 OKR JSON 后按下面规则处理：
 
-- `OKR-inspection/delay-test-rate-skill/out/history/YYYY-MM-DD.json` 中 `metrics.delayed_test_requirements > 0` 时，从 `reschedule-delayed-test ` 目录运行 `/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python main.py`。
-- `OKR-inspection/delay-online-rate-skill/out/history/YYYY-MM-DD.json` 中 `metrics.delayed_online_requirements > 0` 时，从 `repair-delayed-launch` 目录运行 `/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python main.py`。
+- `OKR-inspection/delay-test-rate-skill/out/history/YYYY-MM-DD.json` 中 `metrics.delayed_test_requirements > 0` 时，从 `reschedule-delayed-test` 目录运行 `"${XUNJIAN_PYTHON:-python3}" main.py`。
+- `OKR-inspection/delay-online-rate-skill/out/history/YYYY-MM-DD.json` 中 `metrics.delayed_online_requirements > 0` 时，从 `repair-delayed-launch` 目录运行 `"${XUNJIAN_PYTHON:-python3}" main.py`。
 - 修复脚本运行后读取对应 `history/YYYY-MM-DD.json`，合并 `results`、`clicked_items`、`modified_items`、`modify_failed_items`，生成 `repair_inspections`。
 - 本地只想重新生成报告、不触发真实修复时，可以运行 `aggregate_report.py --skip-repair`，此时只展示已有修复 JSON。
 
@@ -207,7 +207,7 @@ __JOYCLAW_WEEKLY_REPORT_JSON__
 
 折线图规则：
 
-- 延期提测需求卡片画 1 条线：从 `reschedule-delayed-test /history/*.json` 读取 `results.length`，表示 **收银台&内单交易域** 下按 `团队空间 = 支付生态研发部` 筛出的延期提测需求数；不要画 `支付方案研发部` OKR 汇总的计划提测需求数或延期提测率折线。
+- 延期提测需求卡片画 1 条线：从 `reschedule-delayed-test/history/*.json` 读取 `results.length`，表示 **收银台&内单交易域** 下按 `团队空间 = 支付生态研发部` 筛出的延期提测需求数；不要画 `支付方案研发部` OKR 汇总的计划提测需求数或延期提测率折线。
 - 延期上线需求卡片画 1 条线：从 `repair-delayed-launch/history/*.json` 读取 `results.length`，表示 **收银台&内单交易域** 下按 `团队空间 = 支付生态研发部` 筛出的延期上线需求数；不要画 `支付方案研发部` OKR 汇总的计划上线需求数或延期上线率折线。
 - 技术改造工时占比卡片画 1 条线：`technical_refactor_working_hours_rate`。
 - 双周交付率卡片画 1 条线：`biweekly_delivery_rate`。
@@ -327,7 +327,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 总编排 `aggregate_report.py` 已经在写完总 JSON 和 HTML 后自动调用该脚本的填充逻辑。只想基于已有总 JSON 重新生成中文总结时，从项目根目录运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python joyclaw-daily-inspection-orchestrator-skill/scripts/render_inspection_summary.py
+"${XUNJIAN_PYTHON:-python3}" joyclaw-daily-inspection-orchestrator-skill/scripts/render_inspection_summary.py
 ```
 
 中文总结必须遵循：
@@ -342,7 +342,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 JoyClaw 确认延期提测率、延期上线率、技术改造工时占比、双周交付率、AI 巡检、持续交付的当天 JSON 已生成后，从项目根目录运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py
+"${XUNJIAN_PYTHON:-python3}" joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py
 ```
 
 默认输出：

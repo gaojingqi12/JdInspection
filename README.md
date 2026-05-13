@@ -18,12 +18,21 @@
 
 ## 快速启动
 
-项目运行使用 `xunjian` 虚拟环境。
+首次运行可安装依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m playwright install chromium
+```
+
+项目运行默认使用当前 Python；如果本机有固定的 `xunjian` 虚拟环境，可以通过 `XUNJIAN_PYTHON` 指定。模型密钥建议通过环境变量 `XUNJIAN_API_KEY` 提供，避免写入 Git 跟踪文件；可参考 `.env.example`。
 
 ```bash
 cd "/Users/gaojingqi.5/Desktop/JD.com xunjian"
+export XUNJIAN_PYTHON="/path/to/xunjian/bin/python"
+export XUNJIAN_API_KEY="替换为本机 API Key"
 PYTHONPYCACHEPREFIX=/private/tmp/jd-xunjian-pycache \
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python prototype/server.py
+"${XUNJIAN_PYTHON:-python3}" prototype/server.py
 ```
 
 启动后访问：
@@ -58,7 +67,7 @@ kill <pid>
 │   ├── OKR-inspection/                # OKR 四项巡检
 │   ├── AI-inspection/                 # AI 非深度用户巡检
 │   ├── ContinuousDelivery-inspection/ # 持续交付巡检
-│   ├── reschedule-delayed-test /      # 延期提测修复
+│   ├── reschedule-delayed-test/       # 延期提测修复
 │   ├── repair-delayed-launch/         # 延期上线修复
 │   └── joyclaw-daily-inspection-orchestrator-skill/
 │       └── out/weekly-inspection-summary.json

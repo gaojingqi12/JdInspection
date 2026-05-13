@@ -1,7 +1,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
+.idea/
+.vscode/
+.venv/
+venv/
 
 prototype/data/*.json
 prototype/data/*.jsonl
-

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,7 @@ REPORT_SCREENSHOT_DIR = ROOT_DIR / "assets" / "screenshots"
 TEMPLATE_PATH = SKILL_DIR / "assets" / "weekly-line-report-template.html"
 AI_DIR = ROOT_DIR / "AI-inspection"
 CONTINUOUS_DELIVERY_DIR = ROOT_DIR / "ContinuousDelivery-inspection"
-REPAIR_PYTHON = Path("/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python")
+DEFAULT_REPAIR_PYTHON = Path(sys.executable)
 REPAIR_TIMEOUT_SECONDS = 45 * 60
 COMMON_CONFIG = require_config("common")
 OKR_CONFIG = require_config("okr")
@@ -641,7 +642,15 @@ def repair_history_count_points(config: RepairConfig, start_date: date, end_date
 
 
 def repair_python_bin() -> Path:
-    return REPAIR_PYTHON if REPAIR_PYTHON.exists() else Path(sys.executable)
+    configured_value = os.environ.get("XUNJIAN_PYTHON", "").strip()
+    if configured_value:
+        configured = Path(configured_value).expanduser()
+        if configured.exists():
+            return configured
+        resolved = shutil.which(configured_value)
+        if resolved:
+            return Path(resolved)
+    return DEFAULT_REPAIR_PYTHON
 
 
 def repair_command_display() -> str:

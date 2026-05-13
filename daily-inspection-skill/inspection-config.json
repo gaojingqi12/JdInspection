@@ -220,7 +220,7 @@
     "delayed_test": {
       "repair_type": "delayed_test",
       "title": "延期提测修复巡检",
-      "directory": "reschedule-delayed-test ",
+      "directory": "reschedule-delayed-test",
       "url": "https://ine.jd.com/portalDetail?location=%252Fdetail%253FportalUuid%253D20211122143031511247544858946828%25238a5f81d37fc0623f92fcab82f005db8a",
       "card_title": "需求明细-延期提测",
       "filter_date_label": "卡片进入测试阶段时间",

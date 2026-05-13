@@ -7,7 +7,7 @@
 本目录：
 
 ```text
-/Users/gaojingqi.5/Desktop/daily-inspection-skill/reschedule-delayed-test 
+daily-inspection-skill/reschedule-delayed-test
 ```
 
 当天 JSON 路径：

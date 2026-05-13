@@ -47,6 +47,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/
 
 # Repair runtime histories and caches
 repair-delayed-launch/history/
+reschedule-delayed-test/history/
 reschedule-delayed-test\ /history/
 
 # Downloaded spreadsheets and generated archives

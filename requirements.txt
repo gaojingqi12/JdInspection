@@ -1,0 +1,4 @@
+langgraph
+openpyxl
+pandas
+playwright

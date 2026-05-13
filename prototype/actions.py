@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import json
+import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -15,7 +17,7 @@ from schedule_policy import action_schedule_status, file_modified_date, fixed_cy
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-PYTHON_BIN = Path("/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python")
+DEFAULT_XUNJIAN_PYTHON = Path(sys.executable)
 JOB_LOCK = threading.Lock()
 JOBS: dict[str, dict] = {}
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 60 * 60
@@ -37,7 +39,15 @@ def now_text() -> str:
 
 
 def python_bin() -> str:
-    return str(PYTHON_BIN if PYTHON_BIN.exists() else Path(sys.executable))
+    configured_value = os.environ.get("XUNJIAN_PYTHON", "").strip()
+    if configured_value:
+        configured = Path(configured_value).expanduser()
+        if configured.exists():
+            return str(configured)
+        resolved = shutil.which(configured_value)
+        if resolved:
+            return resolved
+    return str(DEFAULT_XUNJIAN_PYTHON)
 
 
 def append_job_log(job_id: str, text: str) -> None:
@@ -188,6 +198,12 @@ def friday_dir() -> Path:
 
 def thursday_dir() -> Path:
     return ROOT_DIR / "thursday-to-friday-adjustment"
+
+
+def delayed_test_repair_dir() -> Path:
+    preferred = daily_dir() / "reschedule-delayed-test"
+    legacy = daily_dir() / "reschedule-delayed-test "
+    return preferred if preferred.exists() else legacy
 
 
 def daily_inspection_steps(skip_repair: bool = True) -> list[dict]:
@@ -423,7 +439,7 @@ def action_registry() -> dict[str, dict]:
             "risk": "write",
             "confirm_phrase": "确认修复延期提测",
             "aliases": ["修复延期提测", "延期提测修复"],
-            "steps": [step([py, "main.py"], d / "reschedule-delayed-test ", "修复延期提测", timeout_seconds=REPAIR_ACTION_TIMEOUT_SECONDS)],
+            "steps": [step([py, "main.py"], delayed_test_repair_dir(), "修复延期提测", timeout_seconds=REPAIR_ACTION_TIMEOUT_SECONDS)],
         },
         "repair_delayed_online": {
             "title": "修复延期上线",

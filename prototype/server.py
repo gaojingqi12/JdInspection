@@ -4,7 +4,6 @@ import json
 import mimetypes
 import re
 import shutil
-import threading
 import uuid
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +12,15 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 from agent_memory import load_memory, save_memory, summarize_for_prompt, update_memory_from_turn
+from ai_settings import (
+    AI_CONFIG_LOCK,
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    load_ai_config,
+    normalize_model_name,
+    public_ai_config,
+    save_ai_config,
+)
 from actions import (
     JOBS,
     JOB_LOCK,
@@ -40,10 +48,22 @@ from agent_tools import (
     tool_title,
     validate_tool_call,
 )
+from chat_store import (
+    CHAT_LOCK,
+    begin_chat_turn,
+    create_chat_session,
+    default_chat_messages,
+    find_chat_session,
+    finish_chat_turn,
+    load_chat_store,
+    save_chat_store,
+    sorted_chat_sessions,
+)
 from data_query import query_inspection_data
 from daily_templates import DailyInspectionRenderer
 from failure_records import recent_failure_records
 from failure_recovery import render_failure_recovery
+from http_files import path_is_within
 from inspection_agent import InspectionAgent, InspectionAgentDeps
 from schedule_policy import fixed_cycle_data_freshness, file_modified_date, parse_date, week_end, week_start
 from tool_audit import clear_tool_events, recent_tool_events, record_tool_event
@@ -62,29 +82,7 @@ WEEKLY_METRICS_PATH = ROOT_DIR / "friday-inspection-skill" / "scripts" / "out" /
 AI_INSPECTION_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "AI-inspection" / "out"
 AI_INSPECTION_HISTORY_DIR = AI_INSPECTION_OUT_DIR / "history"
 CONTINUOUS_DELIVERY_OUT_DIR = ROOT_DIR / "daily-inspection-skill" / "ContinuousDelivery-inspection" / "out"
-DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
-DEFAULT_MODEL = "mimo-v2.5-pro"
-DEFAULT_API_KEY = ""
-CHAT_HISTORY_PATH = Path(__file__).resolve().parent / "data" / "chat-history.json"
-AI_CONFIG_PATH = Path(__file__).resolve().parent / "data" / "ai-config.json"
 AGENT_MEMORY_PATH = Path(__file__).resolve().parent / "data" / "agent-memory.json"
-CHAT_LOCK = threading.Lock()
-AI_CONFIG_LOCK = threading.Lock()
-
-MODEL_ALIASES = {
-    "mimo-v2.5-pro": "mimo-v2.5-pro",
-    "mimo-v2.5": "mimo-v2.5",
-    "mimo-v2-pro": "mimo-v2-pro",
-    "mimo-v2-omni": "mimo-v2-omni",
-    "mimo-v2.5-pro".lower(): "mimo-v2.5-pro",
-    "mimo-v2.5".lower(): "mimo-v2.5",
-    "mimo-v2-pro".lower(): "mimo-v2-pro",
-    "mimo-v2-omni".lower(): "mimo-v2-omni",
-    "MiMo-V2.5-Pro".lower(): "mimo-v2.5-pro",
-    "MiMo-V2.5".lower(): "mimo-v2.5",
-    "MiMo-V2-Pro".lower(): "mimo-v2-pro",
-    "MiMo-V2-Omni".lower(): "mimo-v2-omni",
-}
 
 
 METRIC_LABELS = {
@@ -121,8 +119,11 @@ REPAIR_METRIC_CONFIG = {
 }
 
 REPAIR_HISTORY_DIRS = {
-    "delayed_test": ROOT_DIR / "daily-inspection-skill" / "reschedule-delayed-test " / "history",
+    "delayed_test": ROOT_DIR / "daily-inspection-skill" / "reschedule-delayed-test" / "history",
     "delayed_online": ROOT_DIR / "daily-inspection-skill" / "repair-delayed-launch" / "history",
+}
+LEGACY_REPAIR_HISTORY_DIRS = {
+    "delayed_test": ROOT_DIR / "daily-inspection-skill" / "reschedule-delayed-test " / "history",
 }
 
 
@@ -1231,65 +1232,6 @@ def write_json_file(path: Path, payload) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def api_key_mask(api_key: str) -> str:
-    if not api_key:
-        return ""
-    return "•" * 12 + api_key[-4:]
-
-
-def default_ai_config() -> dict:
-    return {
-        "base_url": DEFAULT_BASE_URL,
-        "model": DEFAULT_MODEL,
-        "api_key": DEFAULT_API_KEY,
-        "updated_at": "",
-    }
-
-
-def normalize_model_name(model: str) -> str:
-    text = str(model or "").strip()
-    if not text:
-        return DEFAULT_MODEL
-    return MODEL_ALIASES.get(text.lower(), text)
-
-
-def load_ai_config() -> dict:
-    config = default_ai_config()
-    saved = read_json(AI_CONFIG_PATH, {})
-    if isinstance(saved, dict):
-        config.update({key: value for key, value in saved.items() if value is not None})
-    config["base_url"] = str(config.get("base_url") or DEFAULT_BASE_URL).strip()
-    config["model"] = normalize_model_name(config.get("model") or DEFAULT_MODEL)
-    config["api_key"] = str(config.get("api_key") or "").strip()
-    return config
-
-
-def save_ai_config(config: dict) -> dict:
-    current = load_ai_config()
-    base_url = str(config.get("base_url") or current.get("base_url") or DEFAULT_BASE_URL).strip()
-    model = normalize_model_name(config.get("model") or current.get("model") or DEFAULT_MODEL)
-    api_key = str(config.get("api_key") or "").strip() or current.get("api_key", "")
-    saved = {
-        "base_url": base_url,
-        "model": model,
-        "api_key": api_key,
-        "updated_at": now_text(),
-    }
-    write_json_file(AI_CONFIG_PATH, saved)
-    return saved
-
-
-def public_ai_config(config: dict) -> dict:
-    api_key = str(config.get("api_key") or "")
-    return {
-        "base_url": config.get("base_url") or DEFAULT_BASE_URL,
-        "model": config.get("model") or DEFAULT_MODEL,
-        "has_api_key": bool(api_key),
-        "api_key_mask": api_key_mask(api_key),
-        "updated_at": config.get("updated_at") or "",
-    }
-
-
 def html_text(value) -> str:
     text = str(value if value is not None else "")
     return (
@@ -1885,104 +1827,6 @@ def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def chat_message(role: str, content: str) -> dict:
-    return {"role": role, "content": content, "created_at": now_text()}
-
-
-def default_chat_messages() -> list[dict]:
-    return []
-
-
-def chat_title_from_message(message: str) -> str:
-    title = re.sub(r"\s+", " ", (message or "").strip())
-    if not title:
-        return "新对话"
-    return title[:18] + ("..." if len(title) > 18 else "")
-
-
-def load_chat_store() -> dict:
-    store = read_json(CHAT_HISTORY_PATH, {"sessions": [], "active_session_id": ""})
-    if not isinstance(store, dict):
-        store = {"sessions": [], "active_session_id": ""}
-    sessions = store.get("sessions")
-    if not isinstance(sessions, list):
-        sessions = []
-    store["sessions"] = sessions
-    store.setdefault("active_session_id", "")
-    return store
-
-
-def save_chat_store(store: dict) -> None:
-    write_json_file(CHAT_HISTORY_PATH, store)
-
-
-def create_chat_session(store: dict, title: str = "新对话") -> dict:
-    session = {
-        "id": uuid.uuid4().hex[:12],
-        "title": title,
-        "created_at": now_text(),
-        "updated_at": now_text(),
-        "messages": default_chat_messages(),
-    }
-    store.setdefault("sessions", []).append(session)
-    store["active_session_id"] = session["id"]
-    return session
-
-
-def find_chat_session(store: dict, session_id: str) -> dict | None:
-    for session in store.get("sessions", []):
-        if session.get("id") == session_id:
-            return session
-    return None
-
-
-def chat_session_summary(session: dict) -> dict:
-    messages = session.get("messages") or []
-    last = messages[-1] if messages else {}
-    return {
-        "id": session.get("id"),
-        "title": session.get("title") or "新对话",
-        "created_at": session.get("created_at") or "",
-        "updated_at": session.get("updated_at") or "",
-        "last_message": str(last.get("content") or "")[:42],
-        "message_count": len(messages),
-    }
-
-
-def sorted_chat_sessions(store: dict) -> list[dict]:
-    sessions = sorted(store.get("sessions", []), key=lambda item: item.get("updated_at", ""), reverse=True)
-    return [chat_session_summary(session) for session in sessions[:50]]
-
-
-def begin_chat_turn(message: str, session_id: str) -> tuple[str, list[dict]]:
-    with CHAT_LOCK:
-        store = load_chat_store()
-        session = find_chat_session(store, session_id) if session_id else None
-        if not session:
-            session = create_chat_session(store)
-        previous_messages = list(session.get("messages") or [])
-        if session.get("title") == "新对话":
-            session["title"] = chat_title_from_message(message)
-        session.setdefault("messages", []).append(chat_message("user", message))
-        session["updated_at"] = now_text()
-        store["active_session_id"] = session["id"]
-        active_session_id = session["id"]
-        save_chat_store(store)
-    return active_session_id, previous_messages
-
-
-def finish_chat_turn(session_id: str, answer: str) -> list[dict]:
-    with CHAT_LOCK:
-        store = load_chat_store()
-        session = find_chat_session(store, session_id)
-        if session and answer:
-            session.setdefault("messages", []).append(chat_message("assistant", answer))
-            session["updated_at"] = now_text()
-            store["active_session_id"] = session_id
-            save_chat_store(store)
-        return sorted_chat_sessions(store)
-
-
 def out_of_scope_answer() -> str:
     return "这个问题没有命中巡检工具；如果需要执行巡检、刷新报告或修复，请直接说明要执行的动作。"
 
@@ -2552,7 +2396,13 @@ def repair_history_json_path(repair: dict) -> Path | None:
     json_file = repair.get("json_file")
     if not json_file:
         return None
-    return ROOT_DIR / "daily-inspection-skill" / str(json_file)
+    path = ROOT_DIR / "daily-inspection-skill" / str(json_file)
+    if path.exists():
+        return path
+    legacy_text = str(json_file)
+    normalized_text = legacy_text.replace("reschedule-delayed-test /", "reschedule-delayed-test/")
+    normalized = ROOT_DIR / "daily-inspection-skill" / normalized_text
+    return normalized if normalized.exists() else path
 
 
 def derived_repair_status(data: dict, fallback_status: str) -> str:
@@ -3045,6 +2895,8 @@ def history_metric_points(summary: dict, indicator_type: str, key: str) -> list[
 
 def repair_history_count_map(repair_type: str) -> dict[str, int]:
     history_dir = REPAIR_HISTORY_DIRS.get(repair_type)
+    if not history_dir or not history_dir.exists():
+        history_dir = LEGACY_REPAIR_HISTORY_DIRS.get(repair_type)
     if not history_dir or not history_dir.exists():
         return {}
     counts: dict[str, int] = {}
@@ -4086,7 +3938,7 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             resolved = path.resolve()
         except FileNotFoundError:
             return self.send_error(404)
-        if base and not str(resolved).startswith(str(base)):
+        if base and not path_is_within(resolved, base.resolve()):
             return self.send_error(403)
         if not resolved.exists() or not resolved.is_file():
             return self.send_error(404)

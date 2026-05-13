@@ -42,7 +42,7 @@ daily-inspection-skill/
 │   └── bi-weekly-delivery-rate-skill/
 ├── AI-inspection/
 ├── ContinuousDelivery-inspection/
-├── reschedule-delayed-test /
+├── reschedule-delayed-test/
 ├── repair-delayed-launch/
 └── joyclaw-daily-inspection-orchestrator-skill/
 ```
@@ -61,8 +61,8 @@ daily-inspection-skill/
   - AI 深度用户占比巡检
 - `ContinuousDelivery-inspection/`
   - 持续交付三卡片巡检
-- `reschedule-delayed-test /`
-  - 延期提测需求修复脚本，目录名末尾带空格
+- `reschedule-delayed-test/`
+  - 延期提测需求修复脚本
 - `repair-delayed-launch/`
   - 延期上线需求修复脚本
 - `joyclaw-daily-inspection-orchestrator-skill/`
@@ -135,10 +135,10 @@ OKR 内部顺序：
 
 ### 5.1 运行环境
 
-当前项目默认使用这个 Python 环境：
+当前项目默认使用当前 Python。需要指定本机虚拟环境时，设置 `XUNJIAN_PYTHON`：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python
+export XUNJIAN_PYTHON="/path/to/xunjian/bin/python"
 ```
 
 执行前建议确认：
@@ -155,7 +155,7 @@ OKR 内部顺序：
 分别进入各自目录执行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 适用目录：
@@ -170,7 +170,7 @@ OKR 内部顺序：
 在 `AI-inspection` 目录执行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 #### 持续交付巡检
@@ -178,7 +178,7 @@ OKR 内部顺序：
 在 `ContinuousDelivery-inspection` 目录执行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python scripts/run_skill.py
+"${XUNJIAN_PYTHON:-python3}" scripts/run_skill.py
 ```
 
 #### 总编排
@@ -186,7 +186,7 @@ OKR 内部顺序：
 在项目根目录执行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py
+"${XUNJIAN_PYTHON:-python3}" joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py
 ```
 
 
@@ -214,7 +214,7 @@ OKR-inspection/delay-online-rate-skill/out/history/YYYY-MM-DD.json
 
 JoyClaw 只读取这份当天 JSON 和本周 `out/history/` 中已有 JSON，不从截图补数据。
 
-如果当天 OKR JSON 中 `delayed_test_requirements > 0`，总编排会执行 `reschedule-delayed-test /main.py` 并读取 `reschedule-delayed-test /history/YYYY-MM-DD.json`。如果 `delayed_online_requirements > 0`，总编排会执行 `repair-delayed-launch/main.py` 并读取 `repair-delayed-launch/history/YYYY-MM-DD.json`。本地只想重新生成 HTML 时，可以给总编排加 `--skip-repair`，只展示已有修复 JSON。
+如果当天 OKR JSON 中 `delayed_test_requirements > 0`，总编排会执行 `reschedule-delayed-test/main.py` 并读取 `reschedule-delayed-test/history/YYYY-MM-DD.json`。如果 `delayed_online_requirements > 0`，总编排会执行 `repair-delayed-launch/main.py` 并读取 `repair-delayed-launch/history/YYYY-MM-DD.json`。本地只想重新生成 HTML 时，可以给总编排加 `--skip-repair`，只展示已有修复 JSON。
 
 #### 技术改造工时占比
 
@@ -319,7 +319,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 
 ### 8.3 折线图规则
 
-- 延期提测需求：1 条线，读取 `reschedule-delayed-test /history/*.json` 的 `results.length`，展示收银台&内单交易域下筛出的延期提测需求数
+- 延期提测需求：1 条线，读取 `reschedule-delayed-test/history/*.json` 的 `results.length`，展示收银台&内单交易域下筛出的延期提测需求数
 - 延期上线需求：1 条线，读取 `repair-delayed-launch/history/*.json` 的 `results.length`，展示收银台&内单交易域下筛出的延期上线需求数
 - 技术改造工时占比：1 条线
   - `technical_refactor_working_hours_rate`
@@ -361,7 +361,7 @@ joyclaw-daily-inspection-orchestrator-skill/out/daily-inspection-summary.md
 单独重新填充：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python joyclaw-daily-inspection-orchestrator-skill/scripts/render_inspection_summary.py
+"${XUNJIAN_PYTHON:-python3}" joyclaw-daily-inspection-orchestrator-skill/scripts/render_inspection_summary.py
 ```
 
 总编排 `aggregate_report.py` 会在生成 `weekly-inspection-summary.json` 和 `index.html` 后自动生成这份 Markdown。

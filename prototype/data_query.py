@@ -90,6 +90,22 @@ def source_label(path: Path, root_dir: Path) -> str:
         return str(path)
 
 
+def latest_matching_json(directory: Path, pattern: str) -> Path | None:
+    if not directory.exists():
+        return None
+    matches = sorted(directory.glob(pattern), reverse=True)
+    return matches[0] if matches else None
+
+
+def repair_history_dirs(root_dir: Path) -> list[Path]:
+    daily_root = root_dir / "daily-inspection-skill"
+    return [
+        daily_root / "reschedule-delayed-test" / "history",
+        daily_root / "reschedule-delayed-test " / "history",
+        daily_root / "repair-delayed-launch" / "history",
+    ]
+
+
 def flatten_records(payload: Any, source: str, path: str = "$", records: list[dict[str, Any]] | None = None, depth: int = 0) -> list[dict[str, Any]]:
     records = records if records is not None else []
     if len(records) >= MAX_RECORDS_PER_SOURCE or depth > 10:
@@ -261,27 +277,32 @@ def result_fact(record: dict[str, Any], fields: set[str]) -> str:
 
 
 def inspection_data_paths(root_dir: Path) -> list[Path]:
+    continuous_json = latest_matching_json(
+        root_dir / "daily-inspection-skill" / "ContinuousDelivery-inspection" / "out",
+        "continuous_delivery_*.json",
+    )
     paths = [
         root_dir / "daily-inspection-skill" / "joyclaw-daily-inspection-orchestrator-skill" / "out" / "weekly-inspection-summary.json",
         root_dir / "friday-inspection-skill" / "scripts" / "out" / "ine_metrics.json",
         root_dir / "daily-inspection-skill" / "inspection-config.json",
-        root_dir / "daily-inspection-skill" / "ContinuousDelivery-inspection" / "out" / "continuous_delivery_2026-05-11.json",
         root_dir / "thursday-to-friday-adjustment" / "thursday_demands.json",
         root_dir / "thursday-to-friday-adjustment" / "thursday_submit_test_demands.json",
         root_dir / "thursday-to-friday-adjustment" / "thursday_online_demands.json",
         root_dir / "thursday-to-friday-adjustment" / "thursday_to_friday_modified.json",
     ]
+    if continuous_json:
+        paths.append(continuous_json)
     ai_out = root_dir / "daily-inspection-skill" / "AI-inspection" / "out"
     if ai_out.exists():
         paths.extend(sorted(ai_out.glob("non_deep_users_*.json"), reverse=True)[:5])
         history_dir = ai_out / "history"
         if history_dir.exists():
             paths.extend(sorted(history_dir.glob("*.json"), reverse=True)[:10])
-    repair_dirs = [
-        root_dir / "daily-inspection-skill" / "reschedule-delayed-test " / "history",
-        root_dir / "daily-inspection-skill" / "repair-delayed-launch" / "history",
-    ]
-    for directory in repair_dirs:
+    seen_dirs = set()
+    for directory in repair_history_dirs(root_dir):
+        if directory in seen_dirs:
+            continue
+        seen_dirs.add(directory)
         if directory.exists():
             paths.extend(sorted(directory.glob("*.json"), reverse=True)[:5])
     return [path for path in paths if path.exists()]

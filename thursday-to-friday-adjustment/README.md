@@ -29,7 +29,7 @@ http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&ca
 运行命令：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python /Users/gaojingqi.5/Desktop/thursday-to-friday-adjustment/open_jd_cashier.py
+"${XUNJIAN_PYTHON:-python3}" thursday-to-friday-adjustment/open_jd_cashier.py
 ```
 
 ### `generate_modification_report.py`
@@ -39,7 +39,7 @@ http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&ca
 单独刷新报告：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python /Users/gaojingqi.5/Desktop/thursday-to-friday-adjustment/generate_modification_report.py
+"${XUNJIAN_PYTHON:-python3}" thursday-to-friday-adjustment/generate_modification_report.py
 ```
 
 ### `index.html`
@@ -187,7 +187,7 @@ index.html
 再单独运行：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python /Users/gaojingqi.5/Desktop/thursday-to-friday-adjustment/generate_modification_report.py
+"${XUNJIAN_PYTHON:-python3}" thursday-to-friday-adjustment/generate_modification_report.py
 ```
 
 ### 2. 浏览器打开的是旧页面
@@ -224,13 +224,13 @@ index.html
 正常只需要运行主脚本：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python /Users/gaojingqi.5/Desktop/thursday-to-friday-adjustment/open_jd_cashier.py
+"${XUNJIAN_PYTHON:-python3}" thursday-to-friday-adjustment/open_jd_cashier.py
 ```
 
 如果只是想刷新 HTML：
 
 ```bash
-/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python /Users/gaojingqi.5/Desktop/thursday-to-friday-adjustment/generate_modification_report.py
+"${XUNJIAN_PYTHON:-python3}" thursday-to-friday-adjustment/generate_modification_report.py
 ```
 
 ## 维护提醒
