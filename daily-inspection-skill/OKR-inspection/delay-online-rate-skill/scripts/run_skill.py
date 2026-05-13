@@ -48,6 +48,14 @@ def dump_frames(page):
         log(f"frame[{idx}] url = {f.url}")
 
 
+def wait_optional_networkidle(page, timeout_ms: int = 15000):
+    try:
+        page.wait_for_load_state("networkidle", timeout=timeout_ms)
+        log("networkidle 已达到")
+    except PlaywrightTimeoutError:
+        log(f"networkidle {timeout_ms}ms 未达到，继续按 DOM 定位执行")
+
+
 def get_menu_frame(page, timeout_ms=22000):
     import time
     start = time.time()
@@ -449,7 +457,7 @@ def main():
             log("开始打开页面")
             page.goto(URL, wait_until="domcontentloaded", timeout=90000)
             page.wait_for_timeout(7500)
-            page.wait_for_load_state("networkidle", timeout=22000)
+            wait_optional_networkidle(page)
             page.wait_for_timeout(4500)
 
             collapse_sidebar(page)

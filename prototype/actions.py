@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from failure_records import record_job_failure
 from schedule_policy import action_schedule_status, file_modified_date, fixed_cycle_data_freshness, parse_date
 
 
@@ -17,6 +18,18 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 PYTHON_BIN = Path("/Users/gaojingqi.5/miniconda3/envs/xunjian/bin/python")
 JOB_LOCK = threading.Lock()
 JOBS: dict[str, dict] = {}
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 60 * 60
+JOB_WAIT_BUFFER_SECONDS = 5 * 60
+DAILY_INSPECTION_RETRY_LIMIT = 1
+DAILY_OKR_TIMEOUT_SECONDS = 10 * 60
+DAILY_AI_TIMEOUT_SECONDS = 12 * 60
+DAILY_CONTINUOUS_DELIVERY_TIMEOUT_SECONDS = 10 * 60
+SINGLE_DAILY_STEP_TIMEOUT_SECONDS = 12 * 60
+AGGREGATE_REPORT_TIMEOUT_SECONDS = 8 * 60
+AGGREGATE_WITH_REPAIR_TIMEOUT_SECONDS = 50 * 60
+AGGREGATE_REPAIR_SCRIPT_TIMEOUT_SECONDS = 20 * 60
+REPAIR_ACTION_TIMEOUT_SECONDS = 35 * 60
+THURSDAY_ADJUSTMENT_TIMEOUT_SECONDS = 45 * 60
 
 
 def now_text() -> str:
@@ -44,7 +57,34 @@ def set_job(job_id: str, **updates) -> None:
             JOBS[job_id]["updated_at"] = now_text()
 
 
-def run_command(job_id: str, command: list[str], cwd: Path, timeout_seconds: int = 60 * 60) -> dict:
+def record_failure_for_job(job_id: str) -> None:
+    with JOB_LOCK:
+        job = dict(JOBS.get(job_id) or {})
+        if not job or job.get("failure_recorded") or job.get("status") not in {"failed", "partial", "timeout"}:
+            return
+        JOBS[job_id]["failure_recorded"] = True
+
+    try:
+        record = record_job_failure(job)
+    except Exception as exc:
+        with JOB_LOCK:
+            if job_id in JOBS:
+                JOBS[job_id]["failure_recorded"] = False
+        append_job_log(job_id, f"写入失败记录失败：{exc}")
+        return
+
+    if not record:
+        return
+    with JOB_LOCK:
+        if job_id in JOBS:
+            JOBS[job_id]["failure_record_id"] = record.get("id")
+            JOBS[job_id]["failure_recorded_at"] = record.get("recorded_at")
+            JOBS[job_id]["updated_at"] = now_text()
+    append_job_log(job_id, f"已记录失败原因：{record.get('primary_category')}（{record.get('id')}）")
+
+
+def run_command(job_id: str, command: list[str], cwd: Path, timeout_seconds: int | None = None) -> dict:
+    timeout_seconds = int(timeout_seconds or DEFAULT_COMMAND_TIMEOUT_SECONDS)
     display = " ".join(command)
     append_job_log(job_id, f"开始执行：{display}")
     started_at = now_text()
@@ -116,6 +156,7 @@ def step(
     label: str,
     retry_limit: int = 0,
     continue_on_failure: bool = False,
+    timeout_seconds: int | None = None,
 ) -> dict:
     return {
         "command": command,
@@ -123,6 +164,7 @@ def step(
         "label": label,
         "retry_limit": retry_limit,
         "continue_on_failure": continue_on_failure,
+        "timeout_seconds": timeout_seconds or DEFAULT_COMMAND_TIMEOUT_SECONDS,
     }
 
 
@@ -152,37 +194,86 @@ def daily_inspection_steps(skip_repair: bool = True) -> list[dict]:
     root = daily_dir()
     py = python_bin()
     aggregate = [py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py"]
+    aggregate_timeout = AGGREGATE_WITH_REPAIR_TIMEOUT_SECONDS
     if skip_repair:
         aggregate.append("--skip-repair")
-    inspection_retry_limit = 2
+        aggregate_timeout = AGGREGATE_REPORT_TIMEOUT_SECONDS
+    else:
+        aggregate.extend(["--repair-timeout", str(AGGREGATE_REPAIR_SCRIPT_TIMEOUT_SECONDS)])
     return [
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-test-rate-skill", "延期提测率巡检", inspection_retry_limit, True),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "delay-online-rate-skill", "延期上线率巡检", inspection_retry_limit, True),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "technical-refactor-working-hours-skill", "技术改造工时占比巡检", inspection_retry_limit, True),
-        step([py, "scripts/run_skill.py"], root / "OKR-inspection" / "bi-weekly-delivery-rate-skill", "双周交付率巡检", inspection_retry_limit, True),
-        step([py, "scripts/run_skill.py"], root / "AI-inspection", "AI 深度用户巡检", inspection_retry_limit, True),
-        step([py, "scripts/run_skill.py"], root / "ContinuousDelivery-inspection", "持续交付巡检", inspection_retry_limit, True),
-        step(aggregate, root, "生成日常巡检报告"),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "OKR-inspection" / "delay-test-rate-skill",
+            "延期提测率巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_OKR_TIMEOUT_SECONDS,
+        ),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "OKR-inspection" / "delay-online-rate-skill",
+            "延期上线率巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_OKR_TIMEOUT_SECONDS,
+        ),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "OKR-inspection" / "technical-refactor-working-hours-skill",
+            "技术改造工时占比巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_OKR_TIMEOUT_SECONDS,
+        ),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "OKR-inspection" / "bi-weekly-delivery-rate-skill",
+            "双周交付率巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_OKR_TIMEOUT_SECONDS,
+        ),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "AI-inspection",
+            "AI 深度用户巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_AI_TIMEOUT_SECONDS,
+        ),
+        step(
+            [py, "scripts/run_skill.py"],
+            root / "ContinuousDelivery-inspection",
+            "持续交付巡检",
+            DAILY_INSPECTION_RETRY_LIMIT,
+            True,
+            DAILY_CONTINUOUS_DELIVERY_TIMEOUT_SECONDS,
+        ),
+        step(aggregate, root, "生成日常巡检报告", timeout_seconds=aggregate_timeout),
     ]
 
 
 def friday_inspection_steps() -> list[dict]:
     py = python_bin()
-    return [step([py, "scripts/run_skill.py", "--headless"], friday_dir(), "周度 INE 指标抓取")]
+    return [step([py, "scripts/run_skill.py", "--headless"], friday_dir(), "周度 INE 指标抓取", timeout_seconds=30 * 60)]
 
 
 def aggregate_report_step(skip_repair: bool = True) -> dict:
     root = daily_dir()
     py = python_bin()
     command = [py, "joyclaw-daily-inspection-orchestrator-skill/scripts/aggregate_report.py"]
+    timeout_seconds = AGGREGATE_WITH_REPAIR_TIMEOUT_SECONDS
     if skip_repair:
         command.append("--skip-repair")
-    return step(command, root, "刷新日常巡检总报告")
+        timeout_seconds = AGGREGATE_REPORT_TIMEOUT_SECONDS
+    else:
+        command.extend(["--repair-timeout", str(AGGREGATE_REPAIR_SCRIPT_TIMEOUT_SECONDS)])
+    return step(command, root, "刷新日常巡检总报告", timeout_seconds=timeout_seconds)
 
 
 def single_daily_inspection_steps(cwd: Path, label: str) -> list[dict]:
     return [
-        step([python_bin(), "scripts/run_skill.py"], cwd, label),
+        step([python_bin(), "scripts/run_skill.py"], cwd, label, timeout_seconds=SINGLE_DAILY_STEP_TIMEOUT_SECONDS),
         aggregate_report_step(skip_repair=True),
     ]
 
@@ -323,7 +414,7 @@ def action_registry() -> dict[str, dict]:
             "schedule": {"type": "weekday", "weekday": 3},
             "confirm_phrase": "确认执行日期调整",
             "aliases": ["执行计划日期调整", "计划日期调整", "计划日期顺延", "执行计划日期顺延", "本周四顺延至本周五", "计划日期从本周四顺延至本周五"],
-            "steps": [step([py, "open_jd_cashier.py"], t, "执行计划日期顺延")],
+            "steps": [step([py, "open_jd_cashier.py"], t, "执行计划日期顺延", timeout_seconds=THURSDAY_ADJUSTMENT_TIMEOUT_SECONDS)],
         },
         "repair_delayed_test": {
             "title": "修复延期提测",
@@ -332,7 +423,7 @@ def action_registry() -> dict[str, dict]:
             "risk": "write",
             "confirm_phrase": "确认修复延期提测",
             "aliases": ["修复延期提测", "延期提测修复"],
-            "steps": [step([py, "main.py"], d / "reschedule-delayed-test ", "修复延期提测")],
+            "steps": [step([py, "main.py"], d / "reschedule-delayed-test ", "修复延期提测", timeout_seconds=REPAIR_ACTION_TIMEOUT_SECONDS)],
         },
         "repair_delayed_online": {
             "title": "修复延期上线",
@@ -341,7 +432,7 @@ def action_registry() -> dict[str, dict]:
             "risk": "write",
             "confirm_phrase": "确认修复延期上线",
             "aliases": ["修复延期上线", "延期上线修复"],
-            "steps": [step([py, "main.py"], d / "repair-delayed-launch", "修复延期上线")],
+            "steps": [step([py, "main.py"], d / "repair-delayed-launch", "修复延期上线", timeout_seconds=REPAIR_ACTION_TIMEOUT_SECONDS)],
         },
     }
 
@@ -479,9 +570,25 @@ def mark_skipped_steps(job_id: str, start_index: int, total_steps: int) -> None:
         update_step_result(job_id, skipped_index, status="skipped")
 
 
+def step_timeout_seconds(item: dict) -> int:
+    try:
+        return max(1, int(item.get("timeout_seconds") or DEFAULT_COMMAND_TIMEOUT_SECONDS))
+    except (TypeError, ValueError):
+        return DEFAULT_COMMAND_TIMEOUT_SECONDS
+
+
+def job_wait_timeout_seconds(steps: list[dict]) -> int:
+    total = 0
+    for item in steps:
+        retry_limit = max(0, int(item.get("retry_limit") or 0))
+        total += step_timeout_seconds(item) * (retry_limit + 1)
+    return max(DEFAULT_COMMAND_TIMEOUT_SECONDS, total + JOB_WAIT_BUFFER_SECONDS)
+
+
 def run_step_with_retry(job_id: str, index: int, total_steps: int, item: dict) -> dict:
     retry_limit = max(0, int(item.get("retry_limit") or 0))
     attempts_allowed = retry_limit + 1
+    timeout_seconds = step_timeout_seconds(item)
     last_result: dict = {}
     for attempt in range(1, attempts_allowed + 1):
         update_step_result(
@@ -495,13 +602,14 @@ def run_step_with_retry(job_id: str, index: int, total_steps: int, item: dict) -
             error="",
             stdout_tail="",
             stderr_tail="",
+            timeout_seconds=timeout_seconds,
         )
         if attempt == 1:
             append_job_log(job_id, f"步骤 {index}/{total_steps}：{item['label']}")
         else:
             append_job_log(job_id, f"步骤 {index}/{total_steps} 重试 {attempt - 1}/{retry_limit}：{item['label']}")
 
-        result = run_command(job_id, item["command"], item["cwd"])
+        result = run_command(job_id, item["command"], item["cwd"], timeout_seconds=timeout_seconds)
         last_result = {**result, "attempts": attempt, "retry_limit": retry_limit}
         update_step_result(job_id, index, **last_result)
         if result.get("status") == "success":
@@ -539,6 +647,7 @@ def run_job(job_id: str) -> None:
                     error=result.get("error") or "",
                 )
                 append_job_log(job_id, "任务失败，已停止后续步骤。")
+                record_failure_for_job(job_id)
                 return
         with JOB_LOCK:
             current_job = dict(JOBS.get(job_id) or {})
@@ -559,6 +668,7 @@ def run_job(job_id: str) -> None:
                         "status": item.get("status"),
                         "attempts": item.get("attempts"),
                         "retry_limit": item.get("retry_limit"),
+                        "timeout_seconds": item.get("timeout_seconds"),
                         "error": item.get("error"),
                     }
                     for item in failed_steps
@@ -566,15 +676,18 @@ def run_job(job_id: str) -> None:
                 error=f"{len(failed_steps)} 个巡检步骤失败，其余步骤已继续执行。",
             )
             append_job_log(job_id, f"任务部分完成：{len(failed_steps)} 个步骤失败，其余步骤已执行。")
+            record_failure_for_job(job_id)
             return
         set_job(job_id, status="success", finished_at=now_text(), returncode=0)
         append_job_log(job_id, "任务完成。")
     except subprocess.TimeoutExpired as exc:
         append_job_log(job_id, f"任务超时：{exc}")
         set_job(job_id, status="timeout", finished_at=now_text(), returncode=None)
+        record_failure_for_job(job_id)
     except Exception as exc:
         append_job_log(job_id, f"任务异常：{exc}")
         set_job(job_id, status="failed", finished_at=now_text(), error=str(exc))
+        record_failure_for_job(job_id)
 
 
 def start_job(action: str) -> dict:
@@ -589,9 +702,11 @@ def start_job(action: str) -> dict:
             "status": "queued",
             "retry_limit": item.get("retry_limit", 0),
             "continue_on_failure": bool(item.get("continue_on_failure")),
+            "timeout_seconds": step_timeout_seconds(item),
         }
         for index, item in enumerate(steps, 1)
     ]
+    wait_timeout_seconds = job_wait_timeout_seconds(steps)
     with JOB_LOCK:
         JOBS[job_id] = {
             "id": job_id,
@@ -602,6 +717,7 @@ def start_job(action: str) -> dict:
             "updated_at": now_text(),
             "current_step": 0,
             "total_steps": len(steps),
+            "wait_timeout_seconds": wait_timeout_seconds,
             "step_results": step_results,
             "logs": [],
         }
@@ -610,7 +726,12 @@ def start_job(action: str) -> dict:
     return JOBS[job_id]
 
 
-def wait_for_job(job_id: str, timeout_seconds: int = 60 * 60) -> dict:
+def wait_for_job(job_id: str, timeout_seconds: int | None = None) -> dict:
+    with JOB_LOCK:
+        initial_job = dict(JOBS.get(job_id) or {})
+    if timeout_seconds is None:
+        timeout_seconds = int(initial_job.get("wait_timeout_seconds") or DEFAULT_COMMAND_TIMEOUT_SECONDS)
+    timeout_seconds = max(1, int(timeout_seconds))
     deadline = time.time() + timeout_seconds
     terminal_statuses = {"success", "partial", "failed", "timeout"}
     while time.time() < deadline:
@@ -623,6 +744,7 @@ def wait_for_job(job_id: str, timeout_seconds: int = 60 * 60) -> dict:
         time.sleep(1)
 
     set_job(job_id, status="timeout", finished_at=now_text(), error="等待任务完成超时")
+    record_failure_for_job(job_id)
     with JOB_LOCK:
         return dict(JOBS.get(job_id) or {})
 

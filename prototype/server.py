@@ -42,6 +42,7 @@ from agent_tools import (
 )
 from data_query import query_inspection_data
 from daily_templates import DailyInspectionRenderer
+from failure_records import recent_failure_records
 from failure_recovery import render_failure_recovery
 from inspection_agent import InspectionAgent, InspectionAgentDeps
 from schedule_policy import fixed_cycle_data_freshness, file_modified_date, parse_date, week_end, week_start
@@ -3851,6 +3852,8 @@ class PrototypeHandler(BaseHTTPRequestHandler):
             return self.write_json({"tools": public_tools(), "openai_tools": openai_tool_schemas()})
         if path == "/api/tools/audit":
             return self.write_json({"events": recent_tool_events(100)})
+        if path == "/api/failures":
+            return self.write_json({"records": recent_failure_records(100)})
         if path == "/api/ai-config":
             with AI_CONFIG_LOCK:
                 return self.write_json(public_ai_config(load_ai_config()))

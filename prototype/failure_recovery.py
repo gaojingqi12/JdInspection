@@ -150,6 +150,9 @@ def format_step(step: dict[str, Any] | None) -> str:
     retry_text = ""
     if isinstance(attempts, int) and isinstance(retry_limit, int) and retry_limit:
         retry_text = f"，已尝试 {attempts} 次"
+    timeout_seconds = step.get("timeout_seconds")
+    if status == "timeout" and isinstance(timeout_seconds, int):
+        retry_text += f"，单次上限 {timeout_seconds // 60} 分钟"
     return f"步骤 {index}：{label}（{status}{retry_text}）"
 
 

@@ -346,6 +346,16 @@ Tool Audit 位于 `prototype/data/tool-audit.jsonl`。
 
 前端 Agent 轨迹面板会读取该日志用于展示。
 
+## Failure Records
+
+失败记录位于 `prototype/data/failure-records.jsonl`，可通过 `GET /api/failures` 查看最近 100 条。
+
+记录内容包括：
+
+- 失败任务、失败步骤和执行动作
+- 失败分类、失败原因和优化建议
+- 重试次数、单步超时、返回码和日志尾部
+
 ## 后续规划
 
 后续可以继续从以下方向增强：

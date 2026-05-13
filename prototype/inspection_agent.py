@@ -547,7 +547,8 @@ class InspectionAgent:
         job_id = str(job.get("id") or "")
         if not job_id:
             return
-        state["job"] = self.deps.wait_for_job(job_id, 60 * 60)
+        wait_timeout_seconds = int(job.get("wait_timeout_seconds") or 60 * 60)
+        state["job"] = self.deps.wait_for_job(job_id, wait_timeout_seconds)
         jobs = list(state.get("jobs") or [])
         if jobs and jobs[-1].get("id") == job_id:
             jobs[-1] = state["job"]
