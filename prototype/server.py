@@ -470,10 +470,10 @@ STATIC_HOME_OVERRIDE_STYLE = f"""
     }}
     .public-static-hero-art {{
       position: absolute;
-      right: 40px;
-      top: 34px;
+      right: clamp(-170px, -8vw, -90px);
+      top: 210px;
       z-index: 0;
-      width: clamp(78px, 6vw, 118px);
+      width: clamp(260px, 19vw, 410px);
       aspect-ratio: 1 / 1;
       margin: 0;
       border: 1px solid rgba(255,255,255,0.16);
