@@ -31,6 +31,8 @@ BEFORE_CLOSE_WAIT_MS = 15000
 FIELD_WAIT_TIMEOUT_MS = 30000
 DETAIL_WAIT_TIMEOUT_MS = 30000
 CONCURRENCY = 1
+STATUS_CHECK_ONLY = False
+STATUS_CHECK_ONLY_MAX_ITEMS = 1
 FIELD_LABEL_TO_ID = {
     "期望上线日期": "expectedReleaseDate",
     "计划提测日期": "planSubmitTestDate",
@@ -43,6 +45,22 @@ DATE_KEY_TO_LABEL = {
     "plan_submit_test_date": "计划提测日期",
     "plan_date": "计划上线日期",
 }
+STATUS_LABELS = ("状态", "需求状态")
+SKIP_STATUSES_BY_FIELD_LABEL = {
+    "计划提测日期": {"待测试", "测试中"},
+    "计划上线日期": {"待上线", "上线中", "上线完成"},
+}
+KNOWN_DETAIL_STATUSES = tuple(
+    sorted(
+        {
+            status
+            for statuses in SKIP_STATUSES_BY_FIELD_LABEL.values()
+            for status in statuses
+        },
+        key=len,
+        reverse=True,
+    )
+)
 
 
 def normalize_text(text: str) -> str:
@@ -129,6 +147,10 @@ def empty_modified_payload() -> dict[str, object]:
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "count": 0,
         "modified_items": [],
+        "skipped_count": 0,
+        "skipped_items": [],
+        "status_check_count": 0,
+        "status_check_items": [],
         "failed_items": [],
     }
 
@@ -140,6 +162,16 @@ def add_modified_record(payload: dict[str, object], record: dict[str, object]) -
 
 def add_failed_record(payload: dict[str, object], record: dict[str, object]) -> None:
     payload.setdefault("failed_items", []).append(record)
+
+
+def add_skipped_record(payload: dict[str, object], record: dict[str, object]) -> None:
+    payload.setdefault("skipped_items", []).append(record)
+    payload["skipped_count"] = len(payload.get("skipped_items", []))
+
+
+def add_status_check_record(payload: dict[str, object], record: dict[str, object]) -> None:
+    payload.setdefault("status_check_items", []).append(record)
+    payload["status_check_count"] = len(payload.get("status_check_items", []))
 
 
 def build_filtered_payload(thursday_payload: dict[str, object], match_key: str) -> dict[str, object]:
@@ -259,6 +291,95 @@ async def read_date_field_display_value(form_item) -> str:
         except Exception:
             pass
     return ""
+
+
+def extract_status_from_text(text: str) -> str:
+    value = normalize_text(text)
+    if not value:
+        return ""
+
+    for status in KNOWN_DETAIL_STATUSES:
+        if value == status or status in value:
+            return status
+
+    for label in STATUS_LABELS:
+        for separator in ("：", ":"):
+            prefix = f"{label}{separator}"
+            if value.startswith(prefix):
+                return normalize_text(value[len(prefix) :])
+        if value.startswith(label):
+            return normalize_text(value[len(label) :])
+
+    return value
+
+
+async def read_status_value_from_container(container) -> str:
+    value_selectors = [
+        ".card-status-select__label .jacp-ellipsis",
+        ".card-status-select__label",
+        ".card-status-select",
+        ".jacp-select-v2__label .jacp-ellipsis",
+        ".jacp-select-v2__label",
+        ".text-primary",
+    ]
+
+    for selector in value_selectors:
+        try:
+            values = container.locator(selector)
+            for index in range(await values.count()):
+                value = extract_status_from_text(await values.nth(index).inner_text(timeout=1000))
+                if value and value not in STATUS_LABELS:
+                    return value
+        except Exception:
+            pass
+
+    try:
+        value = extract_status_from_text(await container.inner_text(timeout=1000))
+        if value and value not in STATUS_LABELS:
+            return value
+    except Exception:
+        pass
+
+    return ""
+
+
+async def read_demand_status(target_page: Page, timeout_ms: int = 12000) -> str:
+    selectors = []
+    for label in STATUS_LABELS:
+        selectors.extend(
+            [
+                f"xpath=//div[contains(@class,'grid-detail__aside')]//*[contains(@class,'j-label-secondary') and normalize-space(.)='{label}']/following-sibling::*[contains(@class,'card-status-select') or contains(@class,'jacp-select-v2')][1]",
+                f"xpath=//div[contains(@class,'grid-detail__aside')]//*[contains(@class,'j-label-secondary') and normalize-space(.)='{label}']/parent::*[1]",
+                f"xpath=//*[contains(@class,'j-label-secondary') and normalize-space(.)='{label}']/following-sibling::*[contains(@class,'card-status-select') or contains(@class,'jacp-select-v2')][1]",
+                f"xpath=//*[contains(@class,'j-label-secondary') and normalize-space(.)='{label}']/parent::*[1]",
+            ]
+        )
+
+    deadline = time.time() + timeout_ms / 1000
+    while time.time() < deadline:
+        for root_name, root in iter_page_roots(target_page):
+            for selector in selectors:
+                container = await find_visible_locator(root.locator(selector), limit=5, timeout_ms=500)
+                if container is None:
+                    continue
+
+                status = await read_status_value_from_container(container)
+                if status:
+                    print(f"已在 {root_name} 中提取需求状态: {status}")
+                    return status
+        await target_page.wait_for_timeout(300)
+
+    print("未提取到需求状态")
+    return ""
+
+
+def get_skip_reason_for_status(field_label: str, status: str) -> str:
+    normalized_status = normalize_text(status)
+    skip_statuses = SKIP_STATUSES_BY_FIELD_LABEL.get(field_label, set())
+    if normalized_status not in skip_statuses:
+        return ""
+
+    return f"详情页状态为“{normalized_status}”，按规则不修改{field_label}"
 
 
 async def click_date_field_edit_entry(target_page: Page, form_item, value_locator) -> bool:
@@ -572,6 +693,11 @@ async def inspect_and_update_card(
     if not matched_date_keys:
         return [{"status": "skipped_card_not_thursday"}]
 
+    if STATUS_CHECK_ONLY and STATUS_CHECK_ONLY_MAX_ITEMS is not None:
+        checked_count = int(modified_payload.get("status_check_count") or 0)
+        if checked_count >= STATUS_CHECK_ONLY_MAX_ITEMS:
+            return [{"status": "skipped_status_check_limit"}]
+
     try:
         print(
             f"命中本周四，准备打开详情修改: {demand.get('demand_name', '')} "
@@ -579,9 +705,64 @@ async def inspect_and_update_card(
         )
         detail_page, open_mode, card_detail_url = await open_card_detail_page(context, sprint_item, demand)
         detail_url = card_detail_url
+        demand_status = await read_demand_status(detail_page)
 
         for date_key in matched_date_keys:
             field_label = DATE_KEY_TO_LABEL[date_key]
+            skip_reason = get_skip_reason_for_status(field_label, demand_status)
+            if STATUS_CHECK_ONLY:
+                status_check_record = {
+                    "sprint_title": str(sprint_item.get("title", "")),
+                    "sprint_data_item": str(sprint_item.get("data_item", "")),
+                    "sprint_url": str(sprint_item.get("detail_url", "")),
+                    "detail_url": detail_url,
+                    "page_url": detail_page.url,
+                    "item_id": demand.get("item_id", ""),
+                    "group_id": demand.get("group_id", ""),
+                    "item_index": demand.get("item_index", ""),
+                    "demand_name": demand.get("demand_name", ""),
+                    "owner": demand.get("owner", ""),
+                    "matched_date_key": date_key,
+                    "field_label": field_label,
+                    "page_status": demand_status,
+                    "would_skip": bool(skip_reason),
+                    "reason": skip_reason or "不命中状态跳过规则，正式运行时会继续校验日期并修改",
+                    "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                add_status_check_record(modified_payload, status_check_record)
+                records.append({"status": "status_check_only", **status_check_record})
+                print(
+                    f"状态验证: {demand.get('demand_name', '')} | "
+                    f"{field_label} | 页面状态={demand_status or '-'} | "
+                    f"{'会跳过' if skip_reason else '不命中跳过规则'}"
+                )
+                continue
+
+            if skip_reason:
+                skipped_record = {
+                    "sprint_title": str(sprint_item.get("title", "")),
+                    "sprint_data_item": str(sprint_item.get("data_item", "")),
+                    "sprint_url": str(sprint_item.get("detail_url", "")),
+                    "detail_url": detail_url,
+                    "page_url": detail_page.url,
+                    "item_id": demand.get("item_id", ""),
+                    "group_id": demand.get("group_id", ""),
+                    "item_index": demand.get("item_index", ""),
+                    "demand_name": demand.get("demand_name", ""),
+                    "owner": demand.get("owner", ""),
+                    "matched_date_key": date_key,
+                    "field_label": field_label,
+                    "page_status": demand_status,
+                    "source_date": thursday,
+                    "target_date": friday,
+                    "reason": skip_reason,
+                    "skipped_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                add_skipped_record(modified_payload, skipped_record)
+                records.append({"status": "skipped_by_status", **skipped_record})
+                print(f"状态命中跳过规则，不修改: {demand.get('demand_name', '')} | {skip_reason}")
+                continue
+
             try:
                 detail_value = await read_detail_date_field(detail_page, field_label)
             except Exception as exc:

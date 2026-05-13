@@ -97,6 +97,30 @@ def render_failed_rows(items: list[dict]) -> str:
     return "\n".join(rows)
 
 
+def render_skipped_rows(items: list[dict]) -> str:
+    if not items:
+        return '<tr><td colspan="9" class="empty">暂无状态跳过记录</td></tr>'
+
+    rows = []
+    for index, item in enumerate(items, 1):
+        rows.append(
+            f"""
+            <tr>
+              <td class="index">{index}</td>
+              <td><div class="demand">{text(item.get("demand_name"))}</div><div class="meta">cardId {text(item.get("item_id"))}</div></td>
+              <td>{text(item.get("owner") or "未提取")}</td>
+              <td>{text(item.get("sprint_title"))}</td>
+              <td>{field_badge(str(item.get("field_label") or "-"))}</td>
+              <td><span class="status calm">{text(item.get("page_status") or "-")}</span></td>
+              <td>{text(item.get("reason"))}</td>
+              <td>{text(item.get("skipped_at"))}</td>
+              <td>{link(str(item.get("detail_url") or item.get("page_url") or ""), "打开详情")}</td>
+            </tr>
+            """
+        )
+    return "\n".join(rows)
+
+
 def render_planned_rows(items: list[dict], kind: str) -> str:
     if not items:
         return '<tr><td colspan="7" class="empty">暂无待处理记录</td></tr>'
@@ -136,6 +160,7 @@ def generate_report() -> Path:
     online_data = load_json(ONLINE_JSON)
 
     modified_items = modified_data.get("modified_items") or []
+    skipped_items = modified_data.get("skipped_items") or []
     failed_items = modified_data.get("failed_items") or []
     submit_modified = group_items(modified_items, "计划提测日期")
     online_modified = group_items(modified_items, "计划上线日期")
@@ -389,7 +414,7 @@ def generate_report() -> Path:
     </header>
 
     <div class="metrics">
-      {render_metric("成功修改", len(modified_items), f"失败 {len(failed_items)} 条")}
+      {render_metric("成功修改", len(modified_items), f"跳过 {len(skipped_items)} 条 · 失败 {len(failed_items)} 条")}
       {render_metric("修改提测", len(submit_modified), f"待处理清单 {len(submit_planned)} 条")}
       {render_metric("修改上线", len(online_modified), f"待处理清单 {len(online_planned)} 条")}
       {render_metric("源日期", source_date, "本周四")}
@@ -422,6 +447,21 @@ def generate_report() -> Path:
             <tr><th>#</th><th>需求</th><th>负责人</th><th>迭代</th><th>字段</th><th>修改前</th><th>修改后</th><th>页面当前值</th><th>确认状态</th><th>链接</th></tr>
           </thead>
           <tbody>{render_rows(online_modified)}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>状态跳过</h2>
+        <div class="section-note">详情页状态已进入后续阶段，按规则不调整日期</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>需求</th><th>负责人</th><th>迭代</th><th>字段</th><th>页面状态</th><th>原因</th><th>时间</th><th>链接</th></tr>
+          </thead>
+          <tbody>{render_skipped_rows(skipped_items)}</tbody>
         </table>
       </div>
     </section>

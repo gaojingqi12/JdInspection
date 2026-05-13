@@ -828,7 +828,7 @@
   "display_domain": "收银台&内单交易域",
   "time_range": {
     "start_date": "2026-05-11",
-    "end_date": "2026-05-12"
+    "end_date": "2026-05-13"
   },
   "status": "success",
   "indicators": [
@@ -839,7 +839,7 @@
       "department_c3": "支付方案研发部",
       "time_range": {
         "start_date": "2026-05-11",
-        "end_date": "2026-05-12"
+        "end_date": "2026-05-13"
       },
       "status": "success",
       "focus_metric_key": "delay_test_rate_okr",
@@ -854,6 +854,11 @@
             "date": "2026-05-12",
             "value": 38,
             "unit": "count"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 54,
+            "unit": "count"
           }
         ],
         "delayed_test_requirements": [
@@ -866,6 +871,11 @@
             "date": "2026-05-12",
             "value": 0,
             "unit": "count"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 1,
+            "unit": "count"
           }
         ],
         "delay_test_rate_okr": [
@@ -877,6 +887,11 @@
           {
             "date": "2026-05-12",
             "value": 0.0,
+            "unit": "%"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 1.85,
             "unit": "%"
           }
         ]
@@ -897,7 +912,7 @@
       "department_c3": "支付方案研发部",
       "time_range": {
         "start_date": "2026-05-11",
-        "end_date": "2026-05-12"
+        "end_date": "2026-05-13"
       },
       "status": "success",
       "focus_metric_key": "delay_online_rate",
@@ -912,6 +927,11 @@
             "date": "2026-05-12",
             "value": 27,
             "unit": "count"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 51,
+            "unit": "count"
           }
         ],
         "delayed_online_requirements": [
@@ -924,6 +944,11 @@
             "date": "2026-05-12",
             "value": 0,
             "unit": "count"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 1,
+            "unit": "count"
           }
         ],
         "delay_online_rate": [
@@ -935,6 +960,11 @@
           {
             "date": "2026-05-12",
             "value": 0.0,
+            "unit": "%"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 1.96,
             "unit": "%"
           }
         ]
@@ -955,7 +985,7 @@
       "department_c3": "支付方案研发部",
       "time_range": {
         "start_date": "2026-05-11",
-        "end_date": "2026-05-12"
+        "end_date": "2026-05-13"
       },
       "status": "success",
       "focus_metric_key": "technical_refactor_working_hours_rate",
@@ -970,6 +1000,11 @@
             "date": "2026-05-12",
             "value": 180.0,
             "unit": "hour"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 199.0,
+            "unit": "hour"
           }
         ],
         "technical_refactor_working_hours": [
@@ -980,6 +1015,11 @@
           },
           {
             "date": "2026-05-12",
+            "value": 1.16,
+            "unit": "hour"
+          },
+          {
+            "date": "2026-05-13",
             "value": 1.16,
             "unit": "hour"
           }
@@ -993,6 +1033,11 @@
           {
             "date": "2026-05-12",
             "value": 0.64,
+            "unit": "%"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 0.58,
             "unit": "%"
           }
         ]
@@ -1013,7 +1058,7 @@
       "department_c3": "支付方案研发部",
       "time_range": {
         "start_date": "2026-05-11",
-        "end_date": "2026-05-12"
+        "end_date": "2026-05-13"
       },
       "status": "success",
       "focus_metric_key": "biweekly_delivery_rate",
@@ -1028,6 +1073,11 @@
             "date": "2026-05-12",
             "value": 46.43,
             "unit": "%"
+          },
+          {
+            "date": "2026-05-13",
+            "value": 53.7,
+            "unit": "%"
           }
         ]
       },
@@ -1039,71 +1089,91 @@
       }
     }
   ],
-  "inspection_date": "2026-05-12",
-  "generated_at": "2026-05-12 11:05:55",
+  "inspection_date": "2026-05-13",
+  "generated_at": "2026-05-13 11:27:45",
   "repair_inspections": [
     {
       "repair_type": "delayed_test",
       "title": "延期提测修复巡检",
-      "date": "2026-05-12",
+      "date": "2026-05-13",
       "trigger": {
         "indicator_type": "delay_test_rate",
         "metric_key": "delayed_test_requirements",
         "metric_label": "延期提测需求数",
-        "value": 0,
-        "triggered": false
+        "value": 1,
+        "triggered": true
       },
       "script": {
-        "status": "not_triggered",
+        "status": "skipped",
         "directory": "reschedule-delayed-test ",
         "returncode": null,
-        "error": ""
+        "error": "本次聚合使用 --skip-repair，未执行修复脚本。"
       },
-      "json_file": "reschedule-delayed-test /history/2026-05-12.json",
-      "json_exists": false,
+      "json_file": "reschedule-delayed-test /history/2026-05-13.json",
+      "json_exists": true,
       "summary": {
         "巡检项": "延期提测率",
-        "巡检日期": "2026-05-12",
-        "筛选延期提测数": 0,
-        "已点击数": 0,
-        "已修复数": 0,
+        "巡检日期": "2026-05-13",
+        "数据周期": "2026-05-08 ~ 2026-05-13",
+        "部门": "支付方案研发部",
+        "团队空间": "支付生态研发部",
+        "筛选延期提测数": 1,
+        "已点击数": 1,
+        "已修复数": 1,
         "失败数": 0,
-        "巡检状态": "未触发",
-        "成功明细": [],
+        "巡检状态": "通过",
+        "成功明细": [
+          {
+            "需求编码": "R2026031992464",
+            "需求名称": "【SDK服务端】【JD支付】白条快捷支持协议后置",
+            "团队空间": "支付生态研发部",
+            "是否延期提测": "延期提测",
+            "研发负责人": "刘竟博(Seven)",
+            "修改字段": "计划提测日期",
+            "修改前": "",
+            "修改后": "2026-05-13",
+            "修正后计划提测日期": "2026-05-13",
+            "页面当前值": "2026-05-13",
+            "是否点击确认": false,
+            "跳转地址": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/workitems/product_demand?cardId=6018877&sprintId=327085",
+            "modified_at": "2026-05-13 11:24:05"
+          }
+        ],
         "失败明细": [],
         "缺失字段明细": [],
-        "备注": [
-          "收银台&内单交易域延期提测需求数为0。"
-        ]
+        "备注": []
       }
     },
     {
       "repair_type": "delayed_online",
       "title": "延期上线修复巡检",
-      "date": "2026-05-12",
+      "date": "2026-05-13",
       "trigger": {
         "indicator_type": "delay_online_rate",
         "metric_key": "delayed_online_requirements",
         "metric_label": "延期上线需求数",
-        "value": 0,
-        "triggered": false
+        "value": 1,
+        "triggered": true
       },
       "script": {
-        "status": "not_triggered",
+        "status": "skipped",
         "directory": "repair-delayed-launch",
         "returncode": null,
-        "error": ""
+        "error": "本次聚合使用 --skip-repair，未执行修复脚本。"
       },
-      "json_file": "repair-delayed-launch/history/2026-05-12.json",
-      "json_exists": false,
+      "json_file": "repair-delayed-launch/history/2026-05-13.json",
+      "json_exists": true,
       "summary": {
         "巡检项": "延期上线率",
-        "巡检日期": "2026-05-12",
+        "巡检日期": "2026-05-13",
+        "数据周期": "2026-05-08 ~ 2026-05-13",
+        "部门": "支付方案研发部",
+        "团队空间": "支付生态研发部",
         "筛选延期上线数": 0,
         "已点击数": 0,
         "已修复数": 0,
         "失败数": 0,
-        "巡检状态": "未触发",
+        "巡检状态": "通过",
         "成功明细": [],
         "失败明细": [],
         "缺失字段明细": [],
@@ -1126,7 +1196,15 @@
           "key": "delayed_test_requirements",
           "label": "延期提测需求数（收银台&内单交易域）",
           "unit": "count",
-          "points": [],
+          "points": [
+            {
+              "date": "2026-05-13",
+              "value": 1,
+              "unit": "count",
+              "source": "repair_history",
+              "display_domain": "收银台&内单交易域"
+            }
+          ],
           "source": "repair_history"
         }
       ],
@@ -1144,7 +1222,15 @@
           "key": "delayed_online_requirements",
           "label": "延期上线需求数（收银台&内单交易域）",
           "unit": "count",
-          "points": [],
+          "points": [
+            {
+              "date": "2026-05-13",
+              "value": 0,
+              "unit": "count",
+              "source": "repair_history",
+              "display_domain": "收银台&内单交易域"
+            }
+          ],
           "source": "repair_history"
         }
       ],
@@ -1171,6 +1257,11 @@
             {
               "date": "2026-05-12",
               "value": 0.64,
+              "unit": "%"
+            },
+            {
+              "date": "2026-05-13",
+              "value": 0.58,
               "unit": "%"
             }
           ]
@@ -1199,6 +1290,11 @@
               "date": "2026-05-12",
               "value": 46.43,
               "unit": "%"
+            },
+            {
+              "date": "2026-05-13",
+              "value": 53.7,
+              "unit": "%"
             }
           ]
         }
@@ -1206,9 +1302,9 @@
     }
   ],
   "ai_inspection": {
-    "date": "2026-05-12",
-    "inspection_date": "2026-05-12",
-    "query_date": "2026-05-11",
+    "date": "2026-05-13",
+    "inspection_date": "2026-05-13",
+    "query_date": "2026-05-12",
     "indicator_type": "ai_non_deep_users",
     "indicator_name": "AI 深度用户占比 - 软开测试岗",
     "status": "success",
@@ -1218,20 +1314,20 @@
       "常姜洲",
       "常彦升",
       "桂斌",
+      "兰春秋",
       "李进锋",
-      "李景伦",
       "刘竟博(Seven)",
       "刘卫强",
       "刘学",
       "陆鑫(Max)",
       "秦赞",
-      "邱登辉",
       "王朝华",
       "温丽星",
       "谢传威",
       "徐涛",
       "杨飞宇",
       "张鑫",
+      "张欣强",
       "赵梓博",
       "郑双龙",
       "朱涛"
@@ -1252,25 +1348,25 @@
       {
         "erp": "changyansheng1",
         "name": "常彦升",
-        "ai_code_local_submit_rate": 11.77,
+        "ai_code_local_submit_rate": 0.0,
         "is_deep_user": "否"
       },
       {
         "erp": "guibin6",
         "name": "桂斌",
-        "ai_code_local_submit_rate": 4.96,
+        "ai_code_local_submit_rate": 0.0,
+        "is_deep_user": "否"
+      },
+      {
+        "erp": "lanchunqiu",
+        "name": "兰春秋",
+        "ai_code_local_submit_rate": 7.25,
         "is_deep_user": "否"
       },
       {
         "erp": "lijinfeng73",
         "name": "李进锋",
-        "ai_code_local_submit_rate": 1.43,
-        "is_deep_user": "否"
-      },
-      {
-        "erp": "lijinglun1",
-        "name": "李景伦",
-        "ai_code_local_submit_rate": 21.88,
+        "ai_code_local_submit_rate": 0.0,
         "is_deep_user": "否"
       },
       {
@@ -1300,12 +1396,6 @@
       {
         "erp": "qinzan1",
         "name": "秦赞",
-        "ai_code_local_submit_rate": 2.44,
-        "is_deep_user": "否"
-      },
-      {
-        "erp": "qiudenghui1",
-        "name": "邱登辉",
         "ai_code_local_submit_rate": 0.0,
         "is_deep_user": "否"
       },
@@ -1336,13 +1426,19 @@
       {
         "erp": "yangfeiyu",
         "name": "杨飞宇",
-        "ai_code_local_submit_rate": 0.88,
+        "ai_code_local_submit_rate": 0.0,
         "is_deep_user": "否"
       },
       {
         "erp": "zhangxin410",
         "name": "张鑫",
         "ai_code_local_submit_rate": 0.0,
+        "is_deep_user": "否"
+      },
+      {
+        "erp": "zhangxinqiang2",
+        "name": "张欣强",
+        "ai_code_local_submit_rate": 2.86,
         "is_deep_user": "否"
       },
       {
@@ -1360,21 +1456,21 @@
       {
         "erp": "zhutao36",
         "name": "朱涛",
-        "ai_code_local_submit_rate": 4.84,
+        "ai_code_local_submit_rate": 0.0,
         "is_deep_user": "否"
       }
     ]
   },
   "continuous_delivery": {
-    "date": "2026-05-12",
+    "date": "2026-05-13",
     "indicator_type": "continuous_delivery",
     "indicator_name": "持续交付",
     "department_c3": "支付方案研发部",
     "status": "success",
     "metrics": {
-      "team_space_dev_test_online_requirements": 7,
-      "team_space_continuous_delivery_dev_test_online_requirements": 6,
-      "continuous_delivery_team_space_online_requirement_rate": 85.71
+      "team_space_dev_test_online_requirements": 29,
+      "team_space_continuous_delivery_dev_test_online_requirements": 25,
+      "continuous_delivery_team_space_online_requirement_rate": 86.21
     },
     "unit": {
       "team_space_dev_test_online_requirements": "count",
