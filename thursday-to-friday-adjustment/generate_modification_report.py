@@ -28,7 +28,7 @@ def text(value) -> str:
 def link(url: str, label: str) -> str:
     if not url:
         return '<span class="muted">-</span>'
-    return f'<a href="{text(url)}" target="_blank" rel="noreferrer">{text(label)}</a>'
+    return f'<a href="{text(url)}" target="_blank" rel="noopener noreferrer">{text(label)}</a>'
 
 
 def field_badge(field_label: str) -> str:

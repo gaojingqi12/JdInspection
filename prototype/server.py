@@ -464,7 +464,7 @@ def render_repair_report_html() -> str:
                     f'<div class="demand">{html_text(detail.get("需求名称") or detail.get("demand_name") or detail.get("name"))}</div>',
                     html_text(detail.get("研发负责人") or detail.get("owner") or detail.get("负责人")),
                     html_text(detail.get("修正后日期") or detail.get("new_value") or detail.get("修正后计划提测日期") or detail.get("修正后计划上线日期")),
-                    html_text(detail.get("跳转地址") or detail.get("detail_url") or detail.get("url")),
+                    external_link_html(detail.get("跳转地址") or detail.get("detail_url") or detail.get("url")),
                 ]
             )
         sections.append(table_section(str(item.get("title") or "修复明细"), f"状态：{item.get('status') or '-'}", ["#", "需求", "负责人", "修正后日期", "链接"], success_rows, "暂无成功明细"))
@@ -1212,6 +1212,13 @@ def first_present_value(item: dict, *keys: str):
         if value is not None and value != "":
             return value
     return None
+
+def external_link_html(url: str | None, label: str = "打开详情") -> str:
+    value = str(url or "").strip()
+    if not value:
+        return '<span class="muted">-</span>'
+    escaped_url = html_text(value)
+    return f'<a href="{escaped_url}" target="_blank" rel="noopener noreferrer">{html_text(label)}</a>'
 
 def normalize_ai_user_for_summary(item: dict) -> dict:
     submit_rate = first_present_value(
