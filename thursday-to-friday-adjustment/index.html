@@ -4,6 +4,24 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>需求计划日期调整执行报告</title>
+  
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EVZVKTJKWK"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag("js", new Date());
+    gtag("config", "G-EVZVKTJKWK");
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!target || typeof gtag !== "function") return;
+      const url = new URL(target.getAttribute("href"), window.location.href);
+      gtag("event", url.hostname === window.location.hostname ? "click_internal_link" : "click_external_link", {
+        link_url: url.href,
+        link_text: (target.textContent || target.getAttribute("aria-label") || "").trim().slice(0, 100),
+        page_path: window.location.pathname
+      });
+    });
+  </script>
   <style>
     :root {
       --ink: #17202a;
@@ -232,7 +250,7 @@
         <h1>需求计划日期调整执行报告</h1>
       </div>
       <div class="run-card">
-        <strong>2026-05-14 10:20:13</strong>
+        <strong>2026-05-14 10:37:09</strong>
         <div>报告生成时间</div>
         <div class="meta" style="color: rgba(255,255,255,0.72);">主要迭代：【收银台S84】 12 · 【网关S83】 1 · 【收银台S83】 1</div>
       </div>

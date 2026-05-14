@@ -4,6 +4,24 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>计划日期调整报告</title>
+  
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EVZVKTJKWK"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag("js", new Date());
+    gtag("config", "G-EVZVKTJKWK");
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!target || typeof gtag !== "function") return;
+      const url = new URL(target.getAttribute("href"), window.location.href);
+      gtag("event", url.hostname === window.location.hostname ? "click_internal_link" : "click_external_link", {
+        link_url: url.href,
+        link_text: (target.textContent || target.getAttribute("aria-label") || "").trim().slice(0, 100),
+        page_path: window.location.pathname
+      });
+    });
+  </script>
   <style>
     :root {
       --ink: #17202a;
@@ -614,7 +632,7 @@
         <div class="subtitle">当前只展示本周周四后的数据；上一份数据日期为 2026-05-07，已归档不参与展示。</div>
       </div>
       <div class="run-card">
-        <strong>2026-05-14 10:07:08</strong>
+        <strong>2026-05-14 10:37:12</strong>
         <div>报告生成时间</div>
       </div>
     </header>

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -207,6 +208,34 @@ def remove_html_file_addresses(payload: Any) -> None:
     elif isinstance(payload, list):
         for item in payload:
             remove_html_file_addresses(item)
+
+
+def ga4_measurement_id() -> str:
+    return str(os.environ.get("XUNJIAN_GA4_MEASUREMENT_ID") or COMMON_CONFIG.get("ga4_measurement_id") or "").strip()
+
+
+def ga4_head_html() -> str:
+    measurement_id = ga4_measurement_id()
+    if not re.fullmatch(r"G-[A-Z0-9]+", measurement_id):
+        return ""
+    return f"""
+  <script async src="https://www.googletagmanager.com/gtag/js?id={measurement_id}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){{dataLayer.push(arguments);}}
+    gtag("js", new Date());
+    gtag("config", "{measurement_id}");
+    document.addEventListener("click", (event) => {{
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!target || typeof gtag !== "function") return;
+      const url = new URL(target.getAttribute("href"), window.location.href);
+      gtag("event", url.hostname === window.location.hostname ? "click_internal_link" : "click_external_link", {{
+        link_url: url.href,
+        link_text: (target.textContent || target.getAttribute("aria-label") || "").trim().slice(0, 100),
+        page_path: window.location.pathname
+      }});
+    }});
+  </script>"""
 
 
 def first_present(item: dict[str, Any], *keys: str) -> Any:
@@ -990,6 +1019,9 @@ def render_html(summary: dict[str, Any], output_path: Path) -> None:
         "__JOYCLAW_WEEKLY_REPORT_JSON__",
         json.dumps(payload, ensure_ascii=False, indent=2),
     )
+    analytics = ga4_head_html()
+    if analytics:
+        content = content.replace("</head>", f"{analytics}\n</head>", 1)
     output_path.write_text(content, encoding="utf-8")
 
 

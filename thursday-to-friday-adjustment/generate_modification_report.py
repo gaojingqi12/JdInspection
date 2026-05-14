@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from collections import Counter
 from datetime import datetime
 from html import escape
@@ -10,6 +12,7 @@ MODIFIED_JSON = BASE_DIR / "thursday_to_friday_modified.json"
 SUBMIT_TEST_JSON = BASE_DIR / "thursday_submit_test_demands.json"
 ONLINE_JSON = BASE_DIR / "thursday_online_demands.json"
 REPORT_HTML = BASE_DIR / "index.html"
+GA4_CONFIG_PATH = BASE_DIR.parent / "daily-inspection-skill" / "inspection-config.json"
 
 
 def load_json(path: Path) -> dict:
@@ -23,6 +26,42 @@ def load_json(path: Path) -> dict:
 
 def text(value) -> str:
     return escape(str(value or ""))
+
+
+def ga4_measurement_id() -> str:
+    env_value = os.environ.get("XUNJIAN_GA4_MEASUREMENT_ID", "").strip()
+    if env_value:
+        return env_value
+    data = load_json(GA4_CONFIG_PATH)
+    common = data.get("common") if isinstance(data, dict) else {}
+    if not isinstance(common, dict):
+        return ""
+    return str(common.get("ga4_measurement_id") or "").strip()
+
+
+def ga4_head_html() -> str:
+    measurement_id = ga4_measurement_id()
+    if not re.fullmatch(r"G-[A-Z0-9]+", measurement_id):
+        return ""
+    escaped_id = text(measurement_id)
+    return f"""
+  <script async src="https://www.googletagmanager.com/gtag/js?id={escaped_id}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){{dataLayer.push(arguments);}}
+    gtag("js", new Date());
+    gtag("config", "{escaped_id}");
+    document.addEventListener("click", (event) => {{
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!target || typeof gtag !== "function") return;
+      const url = new URL(target.getAttribute("href"), window.location.href);
+      gtag("event", url.hostname === window.location.hostname ? "click_internal_link" : "click_external_link", {{
+        link_url: url.href,
+        link_text: (target.textContent || target.getAttribute("aria-label") || "").trim().slice(0, 100),
+        page_path: window.location.pathname
+      }});
+    }});
+  </script>"""
 
 
 def link(url: str, label: str) -> str:
@@ -179,6 +218,7 @@ def generate_report() -> Path:
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>需求计划日期调整执行报告</title>
+  {ga4_head_html()}
   <style>
     :root {{
       --ink: #17202a;

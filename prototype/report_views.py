@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -1069,6 +1071,45 @@ def html_text(value) -> str:
         .replace('"', "&quot;")
     )
 
+GA4_CONFIG_PATH = Path(__file__).resolve().parents[1] / "daily-inspection-skill" / "inspection-config.json"
+
+def ga4_measurement_id() -> str:
+    env_value = os.environ.get("XUNJIAN_GA4_MEASUREMENT_ID", "").strip()
+    if env_value:
+        return env_value
+    try:
+        data = json.loads(GA4_CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    common = data.get("common") if isinstance(data, dict) else {}
+    if not isinstance(common, dict):
+        return ""
+    return str(common.get("ga4_measurement_id") or "").strip()
+
+def ga4_head_html() -> str:
+    measurement_id = ga4_measurement_id()
+    if not re.fullmatch(r"G-[A-Z0-9]+", measurement_id):
+        return ""
+    escaped_id = html_text(measurement_id)
+    return f"""
+  <script async src="https://www.googletagmanager.com/gtag/js?id={escaped_id}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){{dataLayer.push(arguments);}}
+    gtag("js", new Date());
+    gtag("config", "{escaped_id}");
+    document.addEventListener("click", (event) => {{
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!target || typeof gtag !== "function") return;
+      const url = new URL(target.getAttribute("href"), window.location.href);
+      gtag("event", url.hostname === window.location.hostname ? "click_internal_link" : "click_external_link", {{
+        link_url: url.href,
+        link_text: (target.textContent || target.getAttribute("aria-label") || "").trim().slice(0, 100),
+        page_path: window.location.pathname
+      }});
+    }});
+  </script>"""
+
 def report_nav() -> str:
     return """
       <nav class="report-nav">
@@ -1108,6 +1149,7 @@ def report_shell(title: str, subtitle: str, metrics: list[str], sections: list[s
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{html_text(title)}</title>
+  {ga4_head_html()}
   <style>{REPORT_STYLE}</style>
 </head>
 <body>
@@ -1377,6 +1419,7 @@ def static_report_shell(page_title: str, current_key: str, report_content: str) 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{html_text(page_title)}</title>
+  {ga4_head_html()}
   <style>{STATIC_ROOT_REPORT_STYLE}{STATIC_ROOT_PAGE_STYLE}</style>
 </head>
 <body>
@@ -1407,6 +1450,7 @@ def build_static_site_index_html(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>收银台&内单交易域巡检看板</title>
+  {ga4_head_html()}
   <link rel="stylesheet" href="{STATIC_FRONTEND_STYLESHEET_PATH}" />
   <style>{STATIC_HOME_OVERRIDE_STYLE}</style>
 </head>
