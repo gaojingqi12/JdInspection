@@ -1,9 +1,37 @@
 {
   "target_weekday": "Thursday",
-  "target_date": "2026-05-07",
+  "target_date": "2026-05-14",
   "match_key": "plan_date",
-  "count": 5,
+  "count": 16,
   "items": [
+    {
+      "sprint_title": "【网关S82】",
+      "sprint_data_item": "321389",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321389",
+      "item_id": "6086666",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321389&cardId=6086666",
+      "demand_name": "【网关】大额转账解决票款客诉问题",
+      "owner": "王佳斌(Bin)",
+      "plan_submit_test_date": "2026-04-15",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【网关S83】",
+      "sprint_data_item": "325167",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=325167",
+      "item_id": "6094271",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=325167&cardId=6094271",
+      "demand_name": "【网关】【支付收银台】费用融合产品方案",
+      "owner": "王佳斌(Bin)",
+      "plan_submit_test_date": "2026-04-21",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
     {
       "sprint_title": "【网关S83】",
       "sprint_data_item": "325167",
@@ -13,22 +41,109 @@
       "demand_name": "银行转账营销科技不垫资需求",
       "owner": "王佳斌(Bin)",
       "plan_submit_test_date": "2026-04-17",
-      "plan_date": "2026-05-07",
+      "plan_date": "2026-05-14",
       "matched_by": [
         "plan_date"
       ]
     },
     {
-      "sprint_title": "【收银台S84】",
-      "sprint_data_item": "327085",
-      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
-      "item_id": "6146324",
-      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6146324",
-      "demand_name": "同轨项目二期-外单收银台-商户付款人实名一致性校验",
+      "sprint_title": "【网关S85】",
+      "sprint_data_item": "329369",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369",
+      "item_id": "6181549",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369&cardId=6181549",
+      "demand_name": "【收银台服务端+网关】外卡内绑支付结果跳转路径优化",
       "owner": "",
-      "plan_submit_test_date": "2026-04-28",
-      "plan_date": "2026-05-07",
+      "plan_submit_test_date": "2026-05-09",
+      "plan_date": "2026-05-14",
       "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【网关S85】",
+      "sprint_data_item": "329369",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369",
+      "item_id": "6208579",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369&cardId=6208579",
+      "demand_name": "【先享后付】购物车金融手机号透传",
+      "owner": "张欣强",
+      "plan_submit_test_date": "2026-05-14",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_submit_test_date",
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【网关S85】",
+      "sprint_data_item": "329369",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369",
+      "item_id": "6209530",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329369&cardId=6209530",
+      "demand_name": "【网关】大额转账解决票款客诉问题",
+      "owner": "王佳斌(Bin)",
+      "plan_submit_test_date": "2026-05-13",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S85】",
+      "sprint_data_item": "329382",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382",
+      "item_id": "6190382",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382&cardId=6190382",
+      "demand_name": "【前置】极速支付六期",
+      "owner": "谢传威",
+      "plan_submit_test_date": "2026-05-11",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S85】",
+      "sprint_data_item": "329382",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382",
+      "item_id": "6188181",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382&cardId=6188181",
+      "demand_name": "【SDK服务端】【JD支付】白条快捷-微信签约",
+      "owner": "",
+      "plan_submit_test_date": "2026-05-11",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S85】",
+      "sprint_data_item": "329382",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382",
+      "item_id": "6210200",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382&cardId=6210200",
+      "demand_name": "【H5服务端】【收银台】香港超星项目-国家编码字段兼容",
+      "owner": "李进锋",
+      "plan_submit_test_date": "2026-05-14",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_submit_test_date",
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S85】",
+      "sprint_data_item": "329382",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382",
+      "item_id": "5969688",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=329382&cardId=5969688",
+      "demand_name": "【前置】企业主贷还款场景同轨外单金络化",
+      "owner": "王朝华",
+      "plan_submit_test_date": "2026-05-14",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_submit_test_date",
         "plan_date"
       ]
     },
@@ -36,26 +151,12 @@
       "sprint_title": "【收银台S84】",
       "sprint_data_item": "327085",
       "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
-      "item_id": "6136883",
-      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136883",
-      "demand_name": "【SDK服务端】【BRD】因余额不足失败订单捞回-银行费用版",
-      "owner": "兰春秋",
-      "plan_submit_test_date": "2026-04-28",
-      "plan_date": "2026-05-07",
-      "matched_by": [
-        "plan_date"
-      ]
-    },
-    {
-      "sprint_title": "【收银台S84】",
-      "sprint_data_item": "327085",
-      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
-      "item_id": "6136644",
-      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136644",
-      "demand_name": "【支付后引导】多pin共享专项",
-      "owner": "兰春秋",
+      "item_id": "6141440",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6141440",
+      "demand_name": "【前置】TOB收银台未绑卡推荐-换卡支付",
+      "owner": "刘学",
       "plan_submit_test_date": "2026-04-27",
-      "plan_date": "2026-05-07",
+      "plan_date": "2026-05-14",
       "matched_by": [
         "plan_date"
       ]
@@ -64,12 +165,68 @@
       "sprint_title": "【收银台S84】",
       "sprint_data_item": "327085",
       "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
-      "item_id": "6157045",
-      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6157045",
-      "demand_name": "同轨项目二期-外单收银台-H5切换登录用户",
-      "owner": "刘会香",
-      "plan_submit_test_date": "2026-04-28",
-      "plan_date": "2026-05-07",
+      "item_id": "6136921",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136921",
+      "demand_name": "【SDK服务端】数币埋点补充",
+      "owner": "",
+      "plan_submit_test_date": "2026-05-01",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6184068",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6184068",
+      "demand_name": "【H5服务端】【收银台前置/结算页前置/营销前置/SDK服务端】余额拉新营销支持钱包余额虚户＞0",
+      "owner": "李进锋",
+      "plan_submit_test_date": "2026-05-08",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S84】",
+      "sprint_data_item": "327085",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085",
+      "item_id": "6136565",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=327085&cardId=6136565",
+      "demand_name": "【SDK服务端】【产品需求】亲密卡-支持收银台后返",
+      "owner": "王诗赋",
+      "plan_submit_test_date": "2026-05-11",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S82】",
+      "sprint_data_item": "321390",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321390",
+      "item_id": "6044879",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321390&cardId=6044879",
+      "demand_name": "同轨项目二期-前置",
+      "owner": "徐涛",
+      "plan_submit_test_date": "2026-05-02",
+      "plan_date": "2026-05-14",
+      "matched_by": [
+        "plan_date"
+      ]
+    },
+    {
+      "sprint_title": "【收银台S82】",
+      "sprint_data_item": "321390",
+      "detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321390",
+      "item_id": "5969676",
+      "card_detail_url": "http://xingyun.jd.com/teamspace/scrum/JD_Cashier/allWorkItems?sprintId=321390&cardId=5969676",
+      "demand_name": "【H5服务端】企业主贷还款场景同轨外单金络化",
+      "owner": "李进锋",
+      "plan_submit_test_date": "2026-04-21",
+      "plan_date": "2026-05-14",
       "matched_by": [
         "plan_date"
       ]
