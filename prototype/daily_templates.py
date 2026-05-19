@@ -173,6 +173,34 @@ class DailyInspectionRenderer:
                 merged_by_code.setdefault(code, {}).update(item)
         return list(merged_by_code.values())
 
+    def _repair_count(self, repair: dict, summary_key: str, raw_key: str) -> int | float:
+        repair_summary = repair.get("summary") or {}
+        summary_value = self._numeric_metric_value(repair_summary.get(summary_key))
+        if isinstance(summary_value, (int, float)):
+            return summary_value
+
+        raw_json = repair.get("raw_json")
+        if not isinstance(raw_json, dict):
+            return 0
+
+        raw_value = self._numeric_metric_value(raw_json.get(raw_key))
+        if isinstance(raw_value, (int, float)):
+            return raw_value
+
+        raw_items = raw_json.get(raw_key.removesuffix("_count") + "_items")
+        if isinstance(raw_items, list):
+            return len(raw_items)
+
+        return 0
+
+    def _repair_was_successful(self, repair: dict, needed_count: int | float) -> bool:
+        if not needed_count:
+            return False
+
+        fixed_count = self._repair_count(repair, "已修复数", "modified_count")
+        failed_count = self._repair_count(repair, "失败数", "modify_failed_count")
+        return fixed_count >= needed_count and failed_count == 0
+
     def _build_repair_detail_block(self, summary: dict) -> str:
         sections: list[str] = []
         for repair in summary.get("repair_inspections", []):
@@ -186,16 +214,17 @@ class DailyInspectionRenderer:
                 continue
 
             label = self._repair_type_label(repair_type)
+            heading = f"✅ 成功修复：{label}" if self._repair_was_successful(repair, needed_count) else f"⚠️ 需要修复：{label}"
             details = self._repair_summary_details(repair)
             if not details:
                 sections.append(
-                    f"⚠️ 需要修复：{label}\n"
+                    f"{heading}\n"
                     "- 负责人：未获取\n"
                     "- 链接：未获取"
                 )
                 continue
 
-            lines = [f"⚠️ 需要修复：{label}"]
+            lines = [heading]
             for item in details:
                 code = self._first_text(item, "需求编码")
                 name = self._first_text(item, "需求名称")
